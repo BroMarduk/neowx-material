@@ -52,6 +52,25 @@ Two new keys, evaluated independently:
 Both accept a **named key** (a name defined in `[[Formatting]]`). Both are valid at chart top level
 and inside a per-page override subsection.
 
+#### Supported per-page override subsections
+
+These are the only five override scopes recognized today. Each template hardcodes its own key via
+`cc.get('<key>', {})`; any other subsection name is ignored as an override.
+
+| Subsection           | Page(s)                                   | Template(s)                              |
+|----------------------|-------------------------------------------|------------------------------------------|
+| `[[[[current]]]]`    | Current / "today"                         | `index.html.tmpl`                        |
+| `[[[[yesterday]]]]`  | Yesterday                                 | `yesterday.html.tmpl`                    |
+| `[[[[week]]]]`       | Week                                      | `week.html.tmpl`                         |
+| `[[[[month]]]]`      | Month — to-date **and** archive month     | `month.html.tmpl`, `month-%Y-%m.html.tmpl` |
+| `[[[[year]]]]`       | Year — to-date **and** archive year       | `year.html.tmpl`, `year-%Y.html.tmpl`    |
+
+`month` and `year` each drive two templates (rolling to-date + per-period archive). A single
+`[[[[month]]]]` / `[[[[year]]]]` subsection applies to both; there is no way at this level to format
+the archive page differently from the to-date page. (Archive pages do default to a different base
+label format — `datetime_graph_archive` vs `datetime_graph_label` — but an override key applies to
+both.) See Future work for the planned `archive-month` / `archive-year` split.
+
 ```ini
 [[[customChartOutTemp]]]
     title     = Outdoor Temperature
@@ -187,5 +206,12 @@ independently for label and tooltip.
 - **Per-chart override for built-in charts.** Built-in charts have no config block, so this needs a
   name→format map (e.g. `[[Charts]] [[[DateFormats]]] outTemp = datetime_custom_full`) consulted in
   `getChartJsCode`. Heaviest piece; only if per-chart granularity on built-ins is wanted.
+- **Separate archive scopes (`archive-month`, `archive-year`).** Today `[[[[month]]]]` /
+  `[[[[year]]]]` drive both the to-date page and the per-period archive page. Add
+  `[[[[archive-month]]]]` and `[[[[archive-year]]]]` subsections so the archive templates
+  (`month-%Y-%m.html.tmpl`, `year-%Y.html.tmpl`) can resolve a distinct format, falling back to the
+  `month` / `year` subsection when the archive-specific one is absent. When implementing the current
+  spec, keep the per-page key configurable per template (rather than assuming a single key per
+  period) so adding these scopes is a localized change to the two archive templates.
 
 Both reuse the same `neowxDateFormatter` helper, so no rework of this spec's output is required.
