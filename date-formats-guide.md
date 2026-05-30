@@ -231,6 +231,7 @@ tooltip because you stare at it all day and don't need the date repeated.
         datetime_custom_graph_short = ddd DD
         datetime_custom_graph_full  = ddd DD.MM.YYYY HH:mm
         datetime_custom_graph_time  = HH:mm
+        datetime_custom_graph_month = MMM
         datetime_custom_card_full   = %a %d.%m.%Y %H:%M
 
         # Per-page: every chart on the Month pages
@@ -253,6 +254,10 @@ tooltip because you stare at it all day and don't need the date repeated.
             column    = avg
             values    = outTemp, dewpoint
             datetime_tooltip_format = datetime_custom_graph_time   # wins over GraphPageFormats
+            [[[[year]]]]
+                datetime_label_format = datetime_custom_graph_month   # axis = "Mar", "Apr", … on year.html
+            [[[[year-archive]]]]
+                datetime_label_format = datetime_custom_graph_full    # archived year spells the date out
 ```
 
 Result, on `month.html`:
@@ -265,7 +270,16 @@ Result, on `month.html`:
 
 On `month-YYYY-MM.html` the axis spells out the full date (the `month-archive` override), the
 Outdoor Temperature tooltip is still `14:05` (per-chart formats apply on every page), and the cards
-inherit the `month` card format. Every other page is untouched.
+inherit the `month` card format.
+
+On the Year pages, only the Outdoor Temperature chart changes (no `GraphPageFormats` is set for
+`year`), thanks to its per-chart sub-sections:
+
+- `year.html` - its axis reads `Mar`, `Apr`, … (the `[[[[year]]]]` label override), tooltip still `14:05`.
+- `year-YYYY.html` - its axis spells out the full date (the `[[[[year-archive]]]]` override), tooltip
+  still `14:05`. Every other chart on the Year pages keeps the global defaults.
+
+Pages and charts you didn't touch render exactly as before.
 
 ---
 
