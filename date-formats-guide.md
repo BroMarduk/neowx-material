@@ -1,0 +1,261 @@
+# Date & Time Formats Guide
+
+A practical guide to controlling how dates and times appear on your NeoWX Material charts and cards.
+
+Everything here lives in **`skin.conf`** under `[Extras] → [[Formatting]]` and (for charts)
+`[[Appearance]]`. No template editing required. After any change, regenerate your report
+(`weectl report run` or wait for the next archive cycle) and hard-refresh the page.
+
+---
+
+## The 60-second version
+
+- **Charts** (the x-axis labels and the hover tooltip) use **moment.js** format tokens — uppercase
+  `DD`, `MM`, `YYYY`, `HH`, lowercase `mm` for minutes.
+- **Cards** (the little "min/max at 14:32" time under a value) use **Python strftime** — `%d`, `%m`,
+  `%Y`, `%H`, `%M`. Different language entirely.
+- You can change formats at three levels for charts and one level for cards:
+
+| What you want to change | Where |
+|---|---|
+| One custom chart's dates | `datetime_label_format` / `datetime_tooltip_format` on that chart |
+| **Every** chart on a page (e.g. the whole Month page) | `[[[GraphPageFormats]]]` |
+| Every **card** on a page | `[[[CardPageFormats]]]` |
+| The global default for all charts | `datetime_graph_label` / `_tooltip` / `_archive` (already in your `skin.conf`) |
+
+You define **named formats** once and refer to them by name. By convention:
+
+- `datetime_custom_graph_*` → a **moment** string (for charts)
+- `datetime_custom_card_*` → a **strftime** string (for cards)
+
+Keeping the prefixes straight matters: feed a moment string to a card (or vice-versa) and you'll get
+literal gibberish on the page.
+
+---
+
+## Token cheat-sheet
+
+**Charts (moment.js)** — examples: `dd DD HH:mm`, `DD.MM.YYYY`, `MMM`
+
+| Token | Meaning | Example |
+|---|---|---|
+| `DD` | day of month, 2-digit | `07` |
+| `ddd` / `dddd` | weekday short / long | `Mon` / `Monday` |
+| `MM` | month number | `03` |
+| `MMM` / `MMMM` | month name short / long | `Mar` / `March` |
+| `YY` / `YYYY` | year 2- / 4-digit | `26` / `2026` |
+| `HH` | hour, 24h | `14` |
+| `mm` | **minutes** (lowercase!) | `05` |
+
+> ⚠️ In moment, **`MM` is the month** and **`mm` is minutes**. Writing `HH:MM` by mistake is so
+> common that the skin auto-corrects `:MM` → `:mm` for you — but get it right anyway.
+
+**Cards (Python strftime)** — examples: `%H:%M`, `%a %d %H:%M`, `%d.%m.%Y %H:%M`
+
+| Token | Meaning | Example |
+|---|---|---|
+| `%d` | day of month | `07` |
+| `%a` / `%A` | weekday short / long | `Mon` / `Monday` |
+| `%m` | month number | `03` |
+| `%b` / `%B` | month name short / long | `Mar` / `March` |
+| `%y` / `%Y` | year 2- / 4-digit | `26` / `2026` |
+| `%H` | hour, 24h | `14` |
+| `%M` | **minutes** | `05` |
+
+---
+
+## Step 1 — define your named formats
+
+Add these under `[Extras] → [[Formatting]]` (next to the existing `datetime_graph_*` keys):
+
+```ini
+[Extras]
+    [[Formatting]]
+        # ... existing datetime_graph_label / _tooltip / _archive stay as-is ...
+
+        # Chart (moment.js) named formats
+        datetime_custom_graph_dayonly = ddd DD
+        datetime_custom_graph_full    = ddd DD.MM.YYYY HH:mm
+        datetime_custom_graph_month   = MMM
+
+        # Card (strftime) named formats
+        datetime_custom_card_short = %H:%M
+        datetime_custom_card_full  = %a %d.%m.%Y %H:%M
+```
+
+> Avoid commas inside a format value — the config parser treats a comma as a list separator.
+> `%a, %d %b` will misbehave; use `%a %d %b` instead.
+
+Now you can reference these by name in the recipes below.
+
+---
+
+## Recipe 1 — change one custom chart's dates
+
+On any `customChart*` in `[[Appearance]]`, add either or both keys:
+
+```ini
+[Extras]
+    [[Appearance]]
+        [[[customChartOutTemp]]]
+            title     = Outdoor Temperature
+            charttype = area
+            values    = outTemp, dewpoint
+            column    = avg
+            datetime_label_format   = datetime_custom_graph_dayonly   # x-axis labels
+            datetime_tooltip_format = datetime_custom_graph_full        # hover tooltip
+```
+
+Set just one if you only want to change the axis *or* the tooltip. Anything you leave out keeps the
+normal format for that page.
+
+### Vary it per page
+
+Inside a custom chart you can override per page using the page sub-sections you already use for
+`column` / `values`:
+
+```ini
+        [[[customChartOutTemp]]]
+            charttype = area
+            values    = outTemp, dewpoint
+            column    = avg
+            datetime_label_format = datetime_custom_graph_dayonly      # default for all pages
+            [[[[week]]]]
+                outTemp  = min, max
+                datetime_label_format = datetime_custom_graph_full     # …but full detail on the Week page
+```
+
+Page sub-sections: `[[[[current]]]]`, `[[[[yesterday]]]]`, `[[[[week]]]]`, `[[[[month]]]]`,
+`[[[[month-archive]]]]`, `[[[[year]]]]`, `[[[[year-archive]]]]`.
+
+---
+
+## Recipe 2 — change **every** chart on a page
+
+This is the one most people actually want: "make the whole Month page use a shorter date." Use
+`[[[GraphPageFormats]]]` under `[[Formatting]]`. It hits **all** charts on the page — the built-in
+ones (outTemp, rain, wind…) *and* your custom charts:
+
+```ini
+[Extras]
+    [[Formatting]]
+        [[[GraphPageFormats]]]
+            [[[[month]]]]
+                label   = datetime_custom_graph_dayonly    # x-axis on every chart on the Month page
+                tooltip = datetime_custom_graph_full
+            [[[[year]]]]
+                label   = datetime_custom_graph_month       # just "Mar", "Apr", … on the Year page
+```
+
+- Scopes: the same seven page names as above.
+- Set `label`, `tooltip`, or both. Omit one and that slot keeps the page's normal format.
+- A per-chart format (Recipe 1) still wins over this for that one chart.
+
+---
+
+## Recipe 3 — make the archive pages different
+
+The **rolling** pages (`month.html`, `year.html` — the current month/year, always updating) and the
+**archive** pages (`month-YYYY-MM.html`, `year-YYYY.html` — a specific finished period) are separate.
+
+A common wish: the rolling pages omit the year (it's obvious), but the fixed archive pages spell it
+out. The `*-archive` scopes inherit from their base scope, so you only specify what differs:
+
+```ini
+        [[[GraphPageFormats]]]
+            [[[[month]]]]
+                label = datetime_custom_graph_dayonly       # "Mon 07"  — rolling month
+            [[[[month-archive]]]]
+                label = datetime_custom_graph_full          # "Mon 07.03.2026 14:05" — archived month
+```
+
+If you set only `[[[[month]]]]`, the archive month page inherits it. The same pattern works for
+custom charts via the `[[[[month-archive]]]]` / `[[[[year-archive]]]]` sub-sections (Recipe 1), where
+it also covers `column` / `values` — e.g. show min/max on the rolling page but a single average on the
+archived page.
+
+---
+
+## Recipe 4 — change the card times
+
+The small "high 24.3° at **14:32**" times under each value card are controlled by
+`[[[CardPageFormats]]]`. Remember: **strftime**, so `datetime_custom_card_*` names.
+
+```ini
+[Extras]
+    [[Formatting]]
+        [[[CardPageFormats]]]
+            month = datetime_custom_card_full      # every card's min/max time on the Month pages
+            year  = datetime_custom_card_full
+```
+
+- Same seven scopes; archive scopes inherit from `month` / `year`.
+- Cards are page-level only — there's no per-individual-card override.
+- The Telemetry page's cards follow the `current` scope.
+
+---
+
+## How the layers combine (precedence)
+
+For a chart's label or tooltip, the skin picks the first of these that's set:
+
+1. **Per-chart** key on that custom chart (Recipe 1) — most specific, wins.
+2. **Per-page** `GraphPageFormats` for that page (Recipe 2).
+3. The **global default** (`datetime_graph_label` / `_tooltip`, or `datetime_graph_archive` for the
+   axis on archive pages).
+
+Cards are simpler: **per-page `CardPageFormats`** → the page's built-in default.
+
+**Built-in defaults**, for reference (these already ship in your `skin.conf`):
+
+| | Rolling current/yesterday | Week | Month | Year | Archive month/year |
+|---|---|---|---|---|---|
+| Chart axis | `datetime_graph_label` | ← | ← | ← | `datetime_graph_archive` |
+| Chart tooltip | `datetime_graph_tooltip` | ← | ← | ← | ← |
+| Card time | `datetime_today` | `datetime` | `datetime` | `datetime_archive` | `datetime` / `datetime_archive` |
+
+**Do nothing and nothing changes.** If you add no `GraphPageFormats`, no `CardPageFormats`, and no
+per-chart keys, every chart and card renders exactly as it does today.
+
+---
+
+## A complete worked example
+
+Goal: short dates everywhere on the Month page's charts, full dates on the archived month, and nicer
+card times site-wide on Month.
+
+```ini
+[Extras]
+    [[Formatting]]
+        datetime_custom_graph_short = ddd DD
+        datetime_custom_graph_full  = ddd DD.MM.YYYY HH:mm
+        datetime_custom_card_full   = %a %d.%m.%Y %H:%M
+
+        [[[GraphPageFormats]]]
+            [[[[month]]]]
+                label   = datetime_custom_graph_short
+                tooltip = datetime_custom_graph_full
+            [[[[month-archive]]]]
+                label   = datetime_custom_graph_full     # archived month spells out the date
+
+        [[[CardPageFormats]]]
+            month = datetime_custom_card_full            # inherited by month-archive too
+```
+
+Result: on `month.html` the chart axes read `Mon 07`, tooltips read `Mon 07.03.2026 14:05`, and card
+times read `Mon 07.03.2026 14:05`. On `month-YYYY-MM.html` the axis also spells out the full date, and
+the cards inherit the same `month` card format. Every other page is untouched.
+
+---
+
+## Troubleshooting
+
+- **Tooltip shows "Invalid date"** — you're on an old build; update the skin (this was fixed).
+- **The whole label is literal text like `datetime_custom_graph_full`** — you referenced a name that
+  doesn't exist in `[[Formatting]]`, or there's a typo. Names are case-sensitive.
+- **A card shows `dd DD HH:mm` literally** — you used a *graph* (moment) name in `CardPageFormats`.
+  Cards need a `datetime_custom_card_*` (strftime) name.
+- **Minutes show the month** — you wrote `MM` instead of `mm` in a moment format somewhere other than
+  after a colon (the auto-fix only covers `:MM`).
+- **Nothing changed** — did you regenerate the report and hard-refresh? Is the chart actually in
+  `charts_order`?
