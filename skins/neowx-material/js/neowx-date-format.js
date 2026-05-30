@@ -11,7 +11,10 @@
 function neowxDateFormatter(fmt) {
     fmt = String(fmt).replace(/:MM/g, ':mm');
     return function (val, timestamp) {
-        var ts = (typeof timestamp !== 'undefined') ? timestamp : val;
+        // Axis-label formatters are called (value, timestampNumber); tooltip formatters are
+        // called (value, optsObject). Use the 2nd arg only when it is the numeric timestamp,
+        // otherwise fall back to the first arg.
+        var ts = (typeof timestamp === 'number') ? timestamp : val;
         return moment.unix(ts).format(fmt);
     };
 }

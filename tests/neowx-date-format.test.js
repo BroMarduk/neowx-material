@@ -44,4 +44,13 @@ assert.strictEqual(
     'month MM must not be turned into minutes'
 );
 
+// 5. Tooltip-style call where ApexCharts passes an options OBJECT as the 2nd arg.
+//    Must format the first arg (the timestamp), NOT moment.unix(object) -> "Invalid date".
+const tipOut = neowxDateFormatter('DD.MM.YYYY')(TS, { series: [], seriesIndex: 0, w: {} });
+assert.strictEqual(
+    tipOut,
+    moment.unix(TS).format('DD.MM.YYYY'),
+    'tooltip call with an opts object as 2nd arg must format the first arg'
+);
+
 console.log('neowx-date-format: all tests passed');
