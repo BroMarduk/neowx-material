@@ -8,7 +8,7 @@ Everything here lives in **`skin.conf`** under `[Extras] → [[Formatting]]` and
 
 ---
 
-## The 60-second version
+## Overview
 
 - **Charts** (the x-axis labels and the hover tooltip) use **moment.js** format tokens - uppercase
   `DD`, `MM`, `YYYY`, `HH`, lowercase `mm` for minutes.
@@ -33,7 +33,7 @@ literal gibberish on the page.
 
 ---
 
-## Token cheat-sheet
+## Token Cheat-Sheet
 
 **Charts (moment.js)** - examples: `dd DD HH:mm`, `DD.MM.YYYY`, `MMM`
 
@@ -53,7 +53,7 @@ literal gibberish on the page.
 > (instead of `DD` `MM` `HH` `hh` `mm`). Example: `D.M.YYYY H:mm` → `7.3.2026 9:05`.
 
 > ⚠️ In moment, **`MM` is the month** and **`mm` is minutes**. Writing `HH:MM` by mistake is so
-> common that the skin auto-corrects `:MM` → `:mm` for you - but get it right anyway.
+> common that the skin auto-corrects `:MM` → `:mm` for you - but it doing it right is easy too.
 
 **Cards (Python strftime)** - examples: `%H:%M`, `%a %d %H:%M`, `%d.%m.%Y %H:%M`
 
@@ -172,23 +172,24 @@ ones (outTemp, rain, wind…) *and* your custom charts:
 
 ## Recipe 3 - Make the Archive Pages Different
 
-The **rolling** pages (`month.html`, `year.html` - the current month/year, always updating) and the
+The **to-date** pages (`month.html`, `year.html` - the current month/year, always updating) and the
 **archive** pages (`month-YYYY-MM.html`, `year-YYYY.html` - a specific finished period) are separate.
+("To-date" is WeeWX's own term - these come from the `[[ToDate]]` report group.)
 
-A common wish: the rolling pages omit the year (it's obvious), but the fixed archive pages spell it
+A common wish: the to-date pages omit the year (it's obvious), but the fixed archive pages spell it
 out. The `*-archive` scopes inherit from their base scope, so you only specify what differs:
 
 ```ini
         [[[GraphPageFormats]]]
             [[[[month]]]]
-                label = datetime_custom_graph_dayonly       # "Mon 07"  - rolling month
+                label = datetime_custom_graph_dayonly       # "Mon 07"  - month to date
             [[[[month-archive]]]]
                 label = datetime_custom_graph_full          # "Mon 07.03.2026 14:05" - archived month
 ```
 
 If you set only `[[[[month]]]]`, the archive month page inherits it. The same pattern works for
 custom charts via the `[[[[month-archive]]]]` / `[[[[year-archive]]]]` sub-sections (Recipe 1), where
-it also covers `column` / `values` - e.g. show min/max on the rolling page but a single average on the
+it also covers `column` / `values` - e.g. show min/max on the to-date page but a single average on the
 archived page.
 
 ---
@@ -225,7 +226,7 @@ Cards are simpler: **per-page `CardPageFormats`** → the page's built-in defaul
 
 **Built-in defaults**, for reference (these already ship in your `skin.conf`):
 
-| | Rolling current/yesterday | Week | Month | Year | Archive month/year |
+| | Current / yesterday | Week | Month | Year | Archive month/year |
 |---|---|---|---|---|---|
 | Chart axis | `datetime_graph_label` | ← | ← | ← | `datetime_graph_archive` |
 | Chart tooltip | `datetime_graph_tooltip` | ← | ← | ← | ← |
@@ -302,7 +303,6 @@ Pages and charts you didn't touch render exactly as before.
 
 ## Troubleshooting
 
-- **Tooltip shows "Invalid date"** - you're on an old build; update the skin (this was fixed).
 - **The whole label is literal text like `datetime_custom_graph_full`** - you referenced a name that
   doesn't exist in `[[Formatting]]`, or there's a typo. Names are case-sensitive.
 - **A card shows `dd DD HH:mm` literally** - you used a *graph* (moment) name in `CardPageFormats`.
@@ -310,4 +310,4 @@ Pages and charts you didn't touch render exactly as before.
 - **Minutes show the month** - you wrote `MM` instead of `mm` in a moment format somewhere other than
   after a colon (the auto-fix only covers `:MM`).
 - **Nothing changed** - did you regenerate the report and hard-refresh? Is the chart actually in
-  `charts_order`?
+  `charts_order`?  Try deleting the html file and letting the report generator recreate it
