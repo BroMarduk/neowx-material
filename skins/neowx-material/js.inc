@@ -111,6 +111,29 @@
         },
     }
 
+    ## --- Per-page chart date format (read by graph_*_config.inc formatters) ---
+    #set $gpf = $Extras.Formatting.get('GraphPageFormats', {})
+    #set $scope = $getVar('neowx_page_scope', '')
+    #set $base_scope = 'month' if $scope == 'month-archive' else ('year' if $scope == 'year-archive' else $scope)
+    #set $is_archive = $scope in ('month-archive', 'year-archive')
+    #set $lbl_key = $gpf.get($scope, {}).get('label',   $gpf.get($base_scope, {}).get('label',   '')) if $scope else ''
+    #set $tip_key = $gpf.get($scope, {}).get('tooltip', $gpf.get($base_scope, {}).get('tooltip', '')) if $scope else ''
+    #set $lbl_fmt = $Extras.Formatting.get($lbl_key, '') if $lbl_key else ''
+    #set $tip_fmt = $Extras.Formatting.get($tip_key, '') if $tip_key else ''
+    #if isinstance($lbl_fmt, list)
+        #set $lbl_fmt = ', '.join($lbl_fmt)
+    #end if
+    #if isinstance($tip_fmt, list)
+        #set $tip_fmt = ', '.join($tip_fmt)
+    #end if
+    #if not $lbl_fmt
+        #set $lbl_fmt = $Extras.Formatting.datetime_graph_archive if $is_archive else $Extras.Formatting.datetime_graph_label
+    #end if
+    #if not $tip_fmt
+        #set $tip_fmt = $Extras.Formatting.datetime_graph_tooltip
+    #end if
+    window.NEOWX_CHART_FORMAT = { label: "$lbl_fmt", tooltip: "$tip_fmt" };
+
     ## Ordinals conversion for W0CHP's custom WindDir Charts:
     function getOrdinalDirection(degrees) {
         var sectors = [
