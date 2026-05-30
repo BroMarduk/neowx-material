@@ -261,10 +261,17 @@ How they fit the cascade:
 - The three card keys (`datetime_today` / `datetime` / `datetime_archive`) are the per-page **card
   default** - the fallback when no `CardPageFormats` entry applies.
 
-> ⚠️ **Some of these keys are shared.** `datetime` (and the `date` / `time` keys you'll see nearby) is
-> also used by the page **header** and the **MQTT live-update** timestamp, so editing `datetime`
-> reaches beyond cards. If you only want to restyle card times, prefer `CardPageFormats` (Example 4) -
-> point the page scopes at a `datetime_custom_card_*` name and leave `datetime` alone.
+> ⚠️ **`datetime` does double duty.** Besides the week/month card times above, `datetime` also formats
+> the header's **"last updated" timestamp** (refreshed live when MQTT is enabled). So restyling
+> `datetime` for cards changes that timestamp too. If you only want to touch card times, use
+> `CardPageFormats` (Example 4) and leave `datetime` alone.
+
+What these keys do **not** control:
+
+- **The header's date and time rows** use their own separate `date` and `time` keys (not in the table
+  above). Edit those to restyle the header without touching cards or charts.
+- **Sunrise / sunset** (and moon / twilight) times aren't formatted here at all - they come from
+  WeeWX's almanac and are controlled in `weewx.conf` under `[Units] [[TimeFormats]]`.
 
 **Rule of thumb:** edit the defaults for a single global look; use the per-page / per-chart layers
 (Examples 1-4) for exceptions. The defaults are also your reference for *what a page currently does* -
