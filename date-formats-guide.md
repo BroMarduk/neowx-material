@@ -103,11 +103,11 @@ Add these under `[Extras] → [[Formatting]]` (next to the existing `datetime_gr
 > Avoid commas inside a format value - the config parser treats a comma as a list separator.
 > `%a, %d %b` will misbehave; use `%a %d %b` instead.
 
-Now you can reference these by name in the recipes below.
+Now you can reference these by name in the examples below.
 
 ---
 
-## Recipe 1 - Change One Custom Chart's Dates
+## Example 1 - Change One Custom Chart's Dates
 
 On any `customChart*` in `[[Appearance]]`, add either or both keys:
 
@@ -147,7 +147,7 @@ Page sub-sections: `[[[[current]]]]`, `[[[[yesterday]]]]`, `[[[[week]]]]`, `[[[[
 
 ---
 
-## Recipe 2 - Change **Every** Chart on a Page
+## Example 2 - Change **Every** Chart on a Page
 
 This is the one most people actually want: "make the whole Month page use a shorter date." Use
 `[[[GraphPageFormats]]]` under `[[Formatting]]`. It hits **all** charts on the page - the built-in
@@ -166,11 +166,11 @@ ones (outTemp, rain, wind…) *and* your custom charts:
 
 - Scopes: the same seven page names as above.
 - Set `label`, `tooltip`, or both. Omit one and that slot keeps the page's normal format.
-- A per-chart format (Recipe 1) still wins over this for that one chart.
+- A per-chart format (Example 1) still wins over this for that one chart.
 
 ---
 
-## Recipe 3 - Make the Archive Pages Different
+## Example 3 - Make the Archive Pages Different
 
 The **to-date** pages (`month.html`, `year.html` - the current month/year, always updating) and the
 **archive** pages (`month-YYYY-MM.html`, `year-YYYY.html` - a specific finished period) are separate.
@@ -188,13 +188,13 @@ out. The `*-archive` scopes inherit from their base scope, so you only specify w
 ```
 
 If you set only `[[[[month]]]]`, the archive month page inherits it. The same pattern works for
-custom charts via the `[[[[month-archive]]]]` / `[[[[year-archive]]]]` sub-sections (Recipe 1), where
+custom charts via the `[[[[month-archive]]]]` / `[[[[year-archive]]]]` sub-sections (Example 1), where
 it also covers `column` / `values` - e.g. show min/max on the to-date page but a single average on the
 archived page.
 
 ---
 
-## Recipe 4 - Change the Card Times
+## Example 4 - Change the Card Times
 
 The small "high 24.3° at **14:32**" times under each value card are controlled by
 `[[[CardPageFormats]]]`. Remember: **strftime**, so `datetime_custom_card_*` names.
@@ -217,8 +217,8 @@ The small "high 24.3° at **14:32**" times under each value card are controlled 
 
 For a chart's label or tooltip, the skin picks the first of these that's set:
 
-1. **Per-chart** key on that custom chart (Recipe 1) - most specific, wins.
-2. **Per-page** `GraphPageFormats` for that page (Recipe 2).
+1. **Per-chart** key on that custom chart (Example 1) - most specific, wins.
+2. **Per-page** `GraphPageFormats` for that page (Example 2).
 3. The **global default** (`datetime_graph_label` / `_tooltip`, or `datetime_graph_archive` for the
    axis on archive pages).
 
@@ -234,6 +234,41 @@ Cards are simpler: **per-page `CardPageFormats`** → the page's built-in defaul
 
 **Do nothing and nothing changes.** If you add no `GraphPageFormats`, no `CardPageFormats`, and no
 per-chart keys, every chart and card renders exactly as it does today.
+
+---
+
+## Customizing the Built-in Defaults
+
+The "defaults" above aren't magic - they're ordinary keys that already live in your `skin.conf` under
+`[Extras] → [[Formatting]]`. The `GraphPageFormats` / `CardPageFormats` / per-chart layers sit *on top*
+of them; if you'd rather change the **baseline for the whole site** (one house style, no per-page
+fiddling), just edit these keys directly.
+
+| Key | Dialect | Ships as | What it affects |
+|---|---|---|---|
+| `datetime_graph_label` | moment | `dd DD HH:mm` | Chart **x-axis** labels on the non-archive pages (current, yesterday, week, month, year) |
+| `datetime_graph_tooltip` | moment | `dd DD.MM. HH:mm` | Chart **hover tooltip** on **every** page (including archive) |
+| `datetime_graph_archive` | moment | `DD.MM.YY` | Chart **x-axis** labels on the **archive** pages (`month-YYYY-MM`, `year-YYYY`) |
+| `datetime_today` | strftime | `%H:%M` | **Card** min/max times on current, yesterday, telemetry |
+| `datetime` | strftime | `%a %d %H:%M` | **Card** min/max times on week, month, month-archive |
+| `datetime_archive` | strftime | `%d.%m. %H:%M` | **Card** min/max times on year, year-archive |
+
+How they fit the cascade:
+
+- The three `datetime_graph_*` keys are **tier 3** for charts - the final fallback when no
+  `GraphPageFormats` and no per-chart key applies. Editing one shifts the baseline for every chart
+  that hasn't been overridden.
+- The three card keys (`datetime_today` / `datetime` / `datetime_archive`) are the per-page **card
+  default** - the fallback when no `CardPageFormats` entry applies.
+
+> ⚠️ **Some of these keys are shared.** `datetime` (and the `date` / `time` keys you'll see nearby) is
+> also used by the page **header** and the **MQTT live-update** timestamp, so editing `datetime`
+> reaches beyond cards. If you only want to restyle card times, prefer `CardPageFormats` (Example 4) -
+> point the page scopes at a `datetime_custom_card_*` name and leave `datetime` alone.
+
+**Rule of thumb:** edit the defaults for a single global look; use the per-page / per-chart layers
+(Examples 1-4) for exceptions. The defaults are also your reference for *what a page currently does* -
+copy the relevant default into a `datetime_custom_*` name as a starting point and tweak from there.
 
 ---
 
