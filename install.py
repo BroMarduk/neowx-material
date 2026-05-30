@@ -37,6 +37,7 @@ class BasicInstaller(ExtensionInstaller):
                         "skins/neowx-material/footer.inc",
                         "skins/neowx-material/forecast.inc",
                         "skins/neowx-material/graph_area_archive_config.inc",
+                        "skins/neowx-material/_card_datetime.inc",
                         "skins/neowx-material/graph_area_config.inc",
                         "skins/neowx-material/graph_bar_archive_config.inc",
                         "skins/neowx-material/graph_bar_config.inc",

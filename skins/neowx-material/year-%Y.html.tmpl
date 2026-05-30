@@ -154,13 +154,9 @@
 
         #include "header.inc"
 
-        ## Per-page card date format: CardPageFormats[year-archive] (a datetime_custom_card_* name) -> page default.
-        #set $cpf = $Extras.Formatting.get('CardPageFormats', {})
-        #set $card_key = $cpf.get('year-archive', $cpf.get('year', ''))
-        #set global $card_datetime = $Extras.Formatting.get($card_key, $Extras.Formatting.datetime_archive) if $card_key else $Extras.Formatting.datetime_archive
-        #if isinstance($card_datetime, list)
-            #set global $card_datetime = ', '.join($card_datetime)
-        #end if
+        #set global $card_scope = 'year-archive'
+        #set global $card_default = $Extras.Formatting.datetime_archive
+        #include "_card_datetime.inc"
         <main>
         <div class="container-fluid d-flex-xxl">
 
