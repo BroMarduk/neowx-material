@@ -502,8 +502,10 @@
                     #set $cc = $Extras.Appearance.get($x, {})
                     #if $cc
                         #set $cc_type = $cc.get('charttype', 'area')
-                        ## Page-specific override subsection (key = "month" for this page).
-                        #set $cc_page = $cc.get('month', {})
+                        ## Archive page: base 'month' subsection overlaid by 'month-archive'
+                        ## (archive keys win; keys absent from archive are inherited from month).
+                        #set $cc_page = dict($cc.get('month', {}))
+                        #silent $cc_page.update($cc.get('month-archive', {}))
                         ## Resolve column list: page → top-level → 'avg'
                         #set $cc_column_raw = $cc_page.get('column', $cc.get('column', 'avg'))
                         #set $cc_cols = ['avg']
