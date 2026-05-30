@@ -347,9 +347,13 @@ function formatDateTime(date, format) {
     var hours12Str = String(hours12).padStart(2, '0');
     var ampm = hours24 >= 12 ? 'PM' : 'AM';
 
-    // Replace format tokens with actual values
-    // Handle longer tokens first to avoid partial replacements (e.g., MMMM before MMM, dddd before ddd)
+    // Replace format tokens with actual values.
+    // Handle longer tokens first to avoid partial replacements (e.g., MMMM before MMM, dddd before ddd).
+    // 'A' (AM/PM) is replaced FIRST: it's the only uppercase-A token in the (post-convert) format
+    // string, so doing it before the name substitutions prevents clobbering inserted names that
+    // contain an "A" - e.g. "April"/"August" would otherwise become "PMpril"/"PMugust".
     var formatted = format
+        .replace(/A/g, ampm)            // AM/PM (before names, which may contain "A")
         .replace(/YYYY/g, year)         // 4-digit year
         .replace(/YY/g, yearShort)      // 2-digit year
         .replace(/MMMM/g, monthName)    // Full month name
@@ -362,8 +366,7 @@ function formatDateTime(date, format) {
         .replace(/hh/g, hours12Str)     // 12-hour format (must be before HH)
         .replace(/HH/g, hours)          // 24-hour format
         .replace(/mm/g, minutes)        // Minutes
-        .replace(/ss/g, seconds)        // Seconds
-        .replace(/A/g, ampm);           // AM/PM
+        .replace(/ss/g, seconds);       // Seconds
 
     return formatted;
 }
