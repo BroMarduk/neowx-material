@@ -262,9 +262,10 @@ How they fit the cascade:
   default** - the fallback when no `CardPageFormats` entry applies.
 
 > ⚠️ **`datetime` does double duty.** Besides the week/month card times above, `datetime` also formats
-> the header's **"last updated" timestamp** (refreshed live when MQTT is enabled). So restyling
-> `datetime` for cards changes that timestamp too. If you only want to touch card times, use
-> `CardPageFormats` (Example 4) and leave `datetime` alone.
+> the header's **"last updated" timestamp** (refreshed live when MQTT is enabled). Two ways to keep
+> them apart: use `CardPageFormats` (Example 4) to restyle only the cards and leave `datetime` alone,
+> or set the optional **`datetime_updated`** key to give the timestamp its own format (it falls back
+> to `datetime` when unset, so existing setups are unaffected).
 
 What these keys do **not** control:
 
