@@ -459,3 +459,459 @@ Expected: chart falls back to the default x-axis format; no `xaxis`/`neowxDateFo
 **Placeholder scan:** No TBD/TODO; every code/edit step shows full content and exact commands. ✓
 
 **Type/name consistency:** `neowxDateFormatter` (file, export, test, all 7 injections) consistent. Cheetah vars `cc_label_key`/`cc_tooltip_key`/`cc_label_raw`/`cc_tooltip_raw`/`cc_label_fmt`/`cc_tooltip_fmt` defined in Edit B and consumed in Edit C consistently. Reserved-key literal identical in Edit A and the verify grep. ✓
+
+---
+
+# Phase 2 — Archive scopes (`month-archive` / `year-archive`)
+
+**Goal:** Let the two per-period archive templates carry an independent whole per-page block
+(`column` / `values` / per-field maps / date formats) that inherits from the base `month` / `year`
+subsection.
+
+**Architecture:** In each archive template, build `cc_page` as `dict(base subsection)` overlaid by
+`.update(archive subsection)`. Every downstream read already goes through `cc_page.get(...)`, so this
+one change gives the archive pages independent config with no other edits. The new format keys are
+already reserved (Phase 1, Task 3).
+
+## Task 6: Merge the archive subsection into `cc_page` (2 templates)
+
+**Files:**
+- Modify: `skins/neowx-material/month-%Y-%m.html.tmpl` (the `#set $cc_page = $cc.get('month', {})` line, ~506)
+- Modify: `skins/neowx-material/year-%Y.html.tmpl` (the `#set $cc_page = $cc.get('year', {})` line, ~534)
+
+- [ ] **Step 1: Edit `month-%Y-%m.html.tmpl`**
+
+Find:
+```
+                        #set $cc_page = $cc.get('month', {})
+```
+Replace with:
+```
+                        ## Archive page: base 'month' subsection overlaid by 'month-archive'
+                        ## (archive keys win; keys absent from archive are inherited from month).
+                        #set $cc_page = dict($cc.get('month', {}))
+                        #silent $cc_page.update($cc.get('month-archive', {}))
+```
+
+- [ ] **Step 2: Edit `year-%Y.html.tmpl`** (note this file's loop uses shallower indentation — match it)
+
+Find:
+```
+                #set $cc_page = $cc.get('year', {})
+```
+Replace with:
+```
+                ## Archive page: base 'year' subsection overlaid by 'year-archive'
+                ## (archive keys win; keys absent from archive are inherited from year).
+                #set $cc_page = dict($cc.get('year', {}))
+                #silent $cc_page.update($cc.get('year-archive', {}))
+```
+
+- [ ] **Step 3: Verify**
+
+```bash
+grep -n "cc_page = dict(\$cc.get('month'" "skins/neowx-material/month-%Y-%m.html.tmpl"
+grep -n "cc_page = dict(\$cc.get('year'"  "skins/neowx-material/year-%Y.html.tmpl"
+grep -c "cc_page.update" "skins/neowx-material/month-%Y-%m.html.tmpl" "skins/neowx-material/year-%Y.html.tmpl"
+grep -n "cc_page = \$cc.get('month', {})\|cc_page = \$cc.get('year', {})" "skins/neowx-material/month-%Y-%m.html.tmpl" "skins/neowx-material/year-%Y.html.tmpl"
+```
+Expected: the first two greps each find the new `dict(...)` line; `cc_page.update` count is `1` per file; the last grep (old plain assignment) returns **nothing** (it was replaced).
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add "skins/neowx-material/month-%Y-%m.html.tmpl" "skins/neowx-material/year-%Y.html.tmpl"
+git commit -m "Add month-archive / year-archive per-page override scopes"
+```
+End the body with a blank line then:
+`Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
+
+---
+
+# Phase 3 — Per-page tier (`GraphPageFormats` → all charts)
+
+**Goal:** A `[[[GraphPageFormats]]]` block sets the x-axis label and/or tooltip date format for every
+chart (built-in + custom) on a page, for all 7 page scopes, with archive→base inheritance; per-chart
+overrides still win.
+
+**Architecture:** Each chart template declares `#set $neowx_page_scope = '<scope>'` before
+`#include "js.inc"`. `js.inc` resolves the page's effective label/tooltip once and emits
+`window.NEOWX_CHART_FORMAT = { label, tooltip }`. The base `graph_*_config.inc` formatters change from
+the baked `$Extras.Formatting.datetime_graph_*` literal to `neowxDateFormatter(NEOWX_CHART_FORMAT.X)`.
+Because every chart spreads `...graph_${type}_config`, all charts pick up the page format. With no
+`GraphPageFormats` configured, the resolution yields the existing global defaults → no visual change.
+
+**Task order matters:** Task 7 (helper fix) → Task 8 (js.inc defines the global) → Task 9 (configs
+read it) → Task 10 (templates declare scope) → Task 11 (docs). Doing 9 before 8 would reference an
+undefined global.
+
+## Task 7: Fix `neowxDateFormatter` argument handling (+ regression test)
+
+**Why:** ApexCharts calls **axis-label** formatters as `(value, timestampNumber)` but **tooltip**
+formatters as `(value, optsObject)`. The Phase 1 helper used `typeof timestamp !== 'undefined'`, so
+for tooltips it grabs the **opts object** → `moment.unix(object)` → "Invalid date". Phase 3 routes all
+tooltips through the helper, so this must be correct. Fix: use the 2nd arg only when it is a number.
+
+**Files:**
+- Modify: `tests/neowx-date-format.test.js`
+- Modify: `skins/neowx-material/js/neowx-date-format.js`
+
+- [ ] **Step 1: Add the failing regression test.** In `tests/neowx-date-format.test.js`, insert
+  immediately before the final `console.log(...)` line:
+
+```js
+// 5. Tooltip-style call where ApexCharts passes an options OBJECT as the 2nd arg.
+//    Must format the first arg (the timestamp), NOT moment.unix(object) -> "Invalid date".
+const tipOut = neowxDateFormatter('DD.MM.YYYY')(TS, { series: [], seriesIndex: 0, w: {} });
+assert.strictEqual(
+    tipOut,
+    moment.unix(TS).format('DD.MM.YYYY'),
+    'tooltip call with an opts object as 2nd arg must format the first arg'
+);
+```
+
+- [ ] **Step 2: Run → fails**
+
+Run: `node tests/neowx-date-format.test.js`
+Expected: FAIL on assertion 5 (`tipOut` is `"Invalid date"`).
+
+- [ ] **Step 3: Fix the helper.** In `skins/neowx-material/js/neowx-date-format.js`, replace:
+
+```js
+        var ts = (typeof timestamp !== 'undefined') ? timestamp : val;
+```
+with:
+```js
+        // Axis-label formatters are called (value, timestampNumber); tooltip formatters are
+        // called (value, optsObject). Use the 2nd arg only when it is the numeric timestamp,
+        // otherwise fall back to the first arg.
+        var ts = (typeof timestamp === 'number') ? timestamp : val;
+```
+
+- [ ] **Step 4: Run → passes**
+
+Run: `node tests/neowx-date-format.test.js`
+Expected: PASS — `neowx-date-format: all tests passed`, exit 0.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add skins/neowx-material/js/neowx-date-format.js tests/neowx-date-format.test.js
+git commit -m "Fix neowxDateFormatter: use 2nd arg only when numeric (tooltip opts object)"
+```
+End the body with a blank line then the `Co-Authored-By` trailer.
+
+## Task 8: Resolve + emit `NEOWX_CHART_FORMAT` in `js.inc`
+
+**Files:**
+- Modify: `skins/neowx-material/js.inc` (inside the global apexcharts `<script>` block, after the
+  `window.Apex = { ... }` object literal closes and before the `## Ordinals conversion` comment /
+  `getOrdinalDirection` function — around line 111).
+
+- [ ] **Step 1: Insert the resolution + emission.** After the line that closes the `window.Apex`
+  object (`    }` followed by a blank line, right before `    ## Ordinals conversion for W0CHP's...`),
+  insert:
+
+```
+    ## --- Per-page chart date format (read by graph_*_config.inc formatters) ---
+    #set $gpf = $Extras.Formatting.get('GraphPageFormats', {})
+    #set $scope = $getVar('neowx_page_scope', '')
+    #set $base_scope = 'month' if $scope == 'month-archive' else ('year' if $scope == 'year-archive' else $scope)
+    #set $is_archive = $scope in ('month-archive', 'year-archive')
+    #set $lbl_key = $gpf.get($scope, {}).get('label',   $gpf.get($base_scope, {}).get('label',   '')) if $scope else ''
+    #set $tip_key = $gpf.get($scope, {}).get('tooltip', $gpf.get($base_scope, {}).get('tooltip', '')) if $scope else ''
+    #set $lbl_fmt = $Extras.Formatting.get($lbl_key, '') if $lbl_key else ''
+    #set $tip_fmt = $Extras.Formatting.get($tip_key, '') if $tip_key else ''
+    #if isinstance($lbl_fmt, list)
+        #set $lbl_fmt = ', '.join($lbl_fmt)
+    #end if
+    #if isinstance($tip_fmt, list)
+        #set $tip_fmt = ', '.join($tip_fmt)
+    #end if
+    #if not $lbl_fmt
+        #set $lbl_fmt = $Extras.Formatting.datetime_graph_archive if $is_archive else $Extras.Formatting.datetime_graph_label
+    #end if
+    #if not $tip_fmt
+        #set $tip_fmt = $Extras.Formatting.datetime_graph_tooltip
+    #end if
+    window.NEOWX_CHART_FORMAT = { label: "$lbl_fmt", tooltip: "$tip_fmt" };
+```
+
+This runs for every page that includes `js.inc`. Pages that don't set `$neowx_page_scope` (telemetry,
+almanac, archive, history) get `$scope = ''`, so `lbl_key`/`tip_key` are `''` and the global defaults
+apply — identical to today.
+
+- [ ] **Step 2: Verify presence**
+
+```bash
+grep -n "NEOWX_CHART_FORMAT\|neowx_page_scope\|GraphPageFormats" skins/neowx-material/js.inc
+```
+Expected: the resolution block plus the `window.NEOWX_CHART_FORMAT = {...}` line are present.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add skins/neowx-material/js.inc
+git commit -m "Resolve and emit per-page NEOWX_CHART_FORMAT in js.inc"
+```
+End the body with the `Co-Authored-By` trailer.
+
+## Task 9: Base config formatters read `NEOWX_CHART_FORMAT` (7 `.inc` files)
+
+**Files (each formatter; read each to confirm before replacing):**
+- `skins/neowx-material/graph_area_config.inc` — label ~25, tooltip ~37
+- `skins/neowx-material/graph_line_config.inc` — label ~55, tooltip ~81
+- `skins/neowx-material/graph_bar_config.inc` — label ~18, tooltip ~27
+- `skins/neowx-material/graph_area_archive_config.inc` — archive label ~25, tooltip ~34
+- `skins/neowx-material/graph_line_archive_config.inc` — archive label ~77, tooltip ~103
+- `skins/neowx-material/graph_bar_archive_config.inc` — archive label ~18, tooltip ~27
+- `skins/neowx-material/graph_radar_config.inc` — tooltip ~27 (no axis formatter)
+
+**Transformation rule.** Each formatter currently has one of these shapes (axis uses `timestamp`,
+tooltip uses `val`, radar tooltip uses a destructured 2nd arg; the area label one also has an inline
+comment):
+```js
+formatter: function(val, timestamp) {
+    var fmt = "$Extras.Formatting.datetime_graph_label";   // or _archive, or _tooltip
+    fmt = fmt.replace(/:MM/g, ':mm');
+    return moment.unix(timestamp).format(fmt);             // or moment.unix(val)
+}
+```
+Replace the **entire** `formatter: function(...) { ... }` (including any inline comment lines) with a
+one-liner, mapping by the `fmt` literal:
+- `datetime_graph_label` **or** `datetime_graph_archive` → `formatter: neowxDateFormatter(NEOWX_CHART_FORMAT.label)`
+- `datetime_graph_tooltip` → `formatter: neowxDateFormatter(NEOWX_CHART_FORMAT.tooltip)`
+
+Example — `graph_area_config.inc` becomes:
+```js
+    labels: {
+        formatter: neowxDateFormatter(NEOWX_CHART_FORMAT.label)
+    }
+...
+    x: {
+        formatter: neowxDateFormatter(NEOWX_CHART_FORMAT.tooltip)
+    }
+```
+
+There are 13 formatter blocks total (6 label/archive-label + 7 tooltip). Do one file at a time.
+
+- [ ] **Step 1:** `graph_area_config.inc` — replace label formatter → `.label`, tooltip formatter → `.tooltip`.
+- [ ] **Step 2:** `graph_line_config.inc` — label → `.label`, tooltip → `.tooltip`.
+- [ ] **Step 3:** `graph_bar_config.inc` — label → `.label`, tooltip → `.tooltip`.
+- [ ] **Step 4:** `graph_area_archive_config.inc` — archive label → `.label`, tooltip → `.tooltip`.
+- [ ] **Step 5:** `graph_line_archive_config.inc` — archive label → `.label`, tooltip → `.tooltip`.
+- [ ] **Step 6:** `graph_bar_archive_config.inc` — archive label → `.label`, tooltip → `.tooltip`.
+- [ ] **Step 7:** `graph_radar_config.inc` — tooltip → `.tooltip` (no label formatter in this file).
+
+- [ ] **Step 8: Verify all replaced**
+
+```bash
+cd skins/neowx-material
+grep -c "neowxDateFormatter(NEOWX_CHART_FORMAT" graph_area_config.inc graph_line_config.inc graph_bar_config.inc graph_area_archive_config.inc graph_line_archive_config.inc graph_bar_archive_config.inc graph_radar_config.inc
+grep -rn "datetime_graph_" graph_area_config.inc graph_line_config.inc graph_bar_config.inc graph_area_archive_config.inc graph_line_archive_config.inc graph_bar_archive_config.inc graph_radar_config.inc
+grep -rn "replace(/:MM" graph_area_config.inc graph_line_config.inc graph_bar_config.inc graph_area_archive_config.inc graph_line_archive_config.inc graph_bar_archive_config.inc graph_radar_config.inc
+```
+Expected: counts → area 2, line 2, bar 2, area_archive 2, line_archive 2, bar_archive 2, radar 1.
+The 2nd and 3rd greps return **nothing** (all `datetime_graph_` literals and `:MM` fixes are gone —
+the fix now lives only in the helper).
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add skins/neowx-material/graph_*config*.inc
+git commit -m "Base chart configs read per-page NEOWX_CHART_FORMAT via helper"
+```
+End the body with the `Co-Authored-By` trailer.
+
+## Task 10: Declare `$neowx_page_scope` in the 7 chart templates
+
+**Files (set the scope on the line immediately before each `#include "js.inc"`):**
+
+| Template                  | scope            | js.inc include ~line |
+|---------------------------|------------------|----------------------|
+| `index.html.tmpl`         | `current`        | 430                  |
+| `yesterday.html.tmpl`     | `yesterday`      | 240                  |
+| `week.html.tmpl`          | `week`           | 238                  |
+| `month.html.tmpl`         | `month`          | 263                  |
+| `month-%Y-%m.html.tmpl`   | `month-archive`  | 266                  |
+| `year.html.tmpl`          | `year`           | 241                  |
+| `year-%Y.html.tmpl`       | `year-archive`   | 294                  |
+
+For each file, find its `#include "js.inc"` line and insert a scope declaration immediately above it,
+matching that file's indentation. Example for `index.html.tmpl`:
+
+Find:
+```
+        #include "js.inc"
+```
+Replace with:
+```
+        #set $neowx_page_scope = 'current'
+        #include "js.inc"
+```
+
+Use the scope from the table for each file. Do NOT add a scope to other templates (telemetry, almanac,
+archive, history) — they intentionally fall back to the global defaults.
+
+- [ ] **Step 1:** `index.html.tmpl` → `current`
+- [ ] **Step 2:** `yesterday.html.tmpl` → `yesterday`
+- [ ] **Step 3:** `week.html.tmpl` → `week`
+- [ ] **Step 4:** `month.html.tmpl` → `month`
+- [ ] **Step 5:** `month-%Y-%m.html.tmpl` → `month-archive`
+- [ ] **Step 6:** `year.html.tmpl` → `year`
+- [ ] **Step 7:** `year-%Y.html.tmpl` → `year-archive`
+
+- [ ] **Step 8: Verify**
+
+```bash
+grep -rn "neowx_page_scope" skins/neowx-material/index.html.tmpl skins/neowx-material/yesterday.html.tmpl skins/neowx-material/week.html.tmpl skins/neowx-material/month.html.tmpl "skins/neowx-material/month-%Y-%m.html.tmpl" skins/neowx-material/year.html.tmpl "skins/neowx-material/year-%Y.html.tmpl"
+```
+Expected: exactly one `#set $neowx_page_scope = '<scope>'` per file with the scope from the table.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add skins/neowx-material/index.html.tmpl skins/neowx-material/yesterday.html.tmpl skins/neowx-material/week.html.tmpl skins/neowx-material/month.html.tmpl "skins/neowx-material/month-%Y-%m.html.tmpl" skins/neowx-material/year.html.tmpl "skins/neowx-material/year-%Y.html.tmpl"
+git commit -m "Declare per-page chart-format scope in the 7 chart templates"
+```
+End the body with the `Co-Authored-By` trailer.
+
+## Task 11: Document `GraphPageFormats` (and archive scopes) in `skin.conf`
+
+**Files:**
+- Modify: `skins/neowx-material/skin.conf` (the `[[Formatting]]` documentation block added in Phase 1
+  Task 4).
+
+- [ ] **Step 1: Add the `GraphPageFormats` doc + example.** Find:
+
+```
+        # datetime_custom_dayonly = ddd DD
+        # datetime_custom_full    = ddd DD.MM.YYYY HH:mm
+```
+Replace with:
+```
+        # datetime_custom_dayonly = ddd DD
+        # datetime_custom_full    = ddd DD.MM.YYYY HH:mm
+
+        # Per-page chart date formats (apply to ALL charts on a page)
+        # ---------------------------------------------------------------------
+        # Set the x-axis label and/or tooltip date format for EVERY chart
+        # (built-in and custom) on a page. Values are named formats from above.
+        # A per-chart datetime_label_format / datetime_tooltip_format still
+        # overrides these for that one chart.
+        #
+        # Page scopes: current, yesterday, week, month, month-archive, year,
+        # year-archive. The two *-archive scopes inherit from month / year when
+        # a key is omitted. With no GraphPageFormats block, charts use the
+        # default datetime_graph_label / datetime_graph_archive /
+        # datetime_graph_tooltip.
+        #
+        # [[[GraphPageFormats]]]
+        #     [[[[month]]]]
+        #         label   = datetime_custom_dayonly
+        #         tooltip = datetime_custom_full
+        #     [[[[year]]]]
+        #         label   = datetime_custom_dayonly
+```
+
+- [ ] **Step 2: Update the per-chart scope list comment** to include the archive scopes. Find:
+
+```
+        # These keys work at chart level and inside a per-page override
+        # subsection ([[[[current]]]], [[[[yesterday]]]], [[[[week]]]],
+        # [[[[month]]]], [[[[year]]]]). An unset or unknown name falls back to
+        # the chart's normal format. Avoid commas inside a format value.
+```
+Replace with:
+```
+        # These keys work at chart level and inside a per-page override
+        # subsection ([[[[current]]]], [[[[yesterday]]]], [[[[week]]]],
+        # [[[[month]]]], [[[[month-archive]]]], [[[[year]]]], [[[[year-archive]]]]).
+        # An unset or unknown name falls back to the chart's normal format.
+        # Avoid commas inside a format value.
+```
+
+- [ ] **Step 3: Verify parse** (skip if `configobj` unavailable)
+
+```bash
+python -c "import configobj; configobj.ConfigObj('skins/neowx-material/skin.conf', file_error=True); print('skin.conf parses OK')"
+```
+Expected: `skin.conf parses OK`.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add skins/neowx-material/skin.conf
+git commit -m "Document GraphPageFormats per-page chart date formats in skin.conf"
+```
+End the body with the `Co-Authored-By` trailer.
+
+## Task 12: Integrated verification (Phases 2 & 3, manual render)
+
+Behavioral acceptance for the archive scopes and per-page tier. Requires a live WeeWX install.
+
+- [ ] **Step 1: Global no-op.** With **no** `GraphPageFormats` and no per-chart keys, regenerate. On
+  any page, confirm the emitted `window.NEOWX_CHART_FORMAT` equals the existing defaults — e.g. on
+  `index.html`: `{ label: "dd DD HH:mm", tooltip: "dd DD.MM. HH:mm" }`; on `month-YYYY-MM.html`:
+  `{ label: "DD.MM.YY", tooltip: "dd DD.MM. HH:mm" }` (archive label default). All charts render as
+  before.
+  ```bash
+  grep -o 'window.NEOWX_CHART_FORMAT = {[^}]*}' HTML_ROOT/index.html HTML_ROOT/month-*-*.html
+  ```
+
+- [ ] **Step 2: Per-page tier.** Add to `[[Formatting]]`:
+  ```
+  datetime_custom_md = DD.MM
+  [[[GraphPageFormats]]]
+      [[[[month]]]]
+          label   = datetime_custom_md
+          tooltip = datetime_custom_md
+  ```
+  Regenerate. Confirm `month.html` emits `NEOWX_CHART_FORMAT = { label: "DD.MM", tooltip: "DD.MM" }`,
+  and in a browser **every** chart on `month.html` — a built-in one (e.g. outTemp), the wind chart,
+  and a custom chart with no per-chart override — uses `DD.MM` on the x-axis and tooltip. Other pages
+  unchanged.
+
+- [ ] **Step 3: Cascade precedence.** Keep Step 2's page default and add a per-chart override to one
+  custom chart on the month page (`[[[customChartOutTemp]]] [[[[month]]]] datetime_label_format =
+  datetime_custom_full`, with `datetime_custom_full` defined). Regenerate. Confirm that chart uses the
+  per-chart format while its neighbours still use the page default `DD.MM`.
+
+- [ ] **Step 4: Per-page archive inheritance.** With only `[[[[month]]]] label` set under
+  `GraphPageFormats` (no `month-archive`), confirm `month-YYYY-MM.html` inherits `DD.MM`. Then add
+  `[[[GraphPageFormats]]][[[[month-archive]]]] label = datetime_custom_full`; confirm the archive page
+  switches to it while `month.html` keeps `DD.MM`.
+
+- [ ] **Step 5: Per-chart archive merge (Phase 2).** On a custom chart, set `[[[[month]]]] outTemp =
+  min, max` and `[[[[month-archive]]]] outTemp = avg`. Regenerate. Confirm `month.html` shows min+max
+  series and `month-YYYY-MM.html` shows a single avg series, and that a chart with `[[[[month]]]]` but
+  no `[[[[month-archive]]]]` renders identically on both pages (inheritance / backward-compat).
+
+- [ ] **Step 6: No console errors** on every regenerated page; tooltips show real dates (not "Invalid
+  date") — this exercises the Task 7 fix in the real ApexCharts tooltip path.
+
+---
+
+## Self-Review (Phases 2 & 3)
+
+**Spec coverage:**
+- `month-archive` / `year-archive` whole-block override with base inheritance → Task 6 (`dict()` +
+  `.update()`); reserved keys already added in Phase 1. ✓
+- `[[[GraphPageFormats]]]` config, 7 scopes, label/tooltip optional → Tasks 8 + 11. ✓
+- Per-page resolution with archive→base inheritance and built-in defaults → Task 8 `#set` block. ✓
+- `NEOWX_CHART_FORMAT` read by base configs (area/line/bar + archive + radar) → Task 9. ✓
+- Per-template scope declaration (7 templates; others default) → Task 10. ✓
+- 3-tier cascade, per-chart still wins → Phase 1 Task 3 injection sits on top of the spread whose
+  formatter now reads `NEOWX_CHART_FORMAT`; verified in Task 12 Step 3. ✓
+- Helper correctness for the real tooltip `(value, optsObject)` signature → Task 7 fix + regression
+  test. ✓
+- Backward compatible (no config → defaults) → Task 8 default fallbacks; Task 12 Step 1. ✓
+- Out of scope (per-chart built-in overrides, value cards, Python strftime) → untouched. ✓
+
+**Placeholder scan:** No TBD/TODO; every code/edit step shows full content and exact commands. ✓
+
+**Type/name consistency:** `NEOWX_CHART_FORMAT.label` / `.tooltip` used identically in Task 8
+(emission) and Task 9 (consumption). `$neowx_page_scope` set in Task 10 and read in Task 8. Scope
+strings (`current`/`yesterday`/`week`/`month`/`month-archive`/`year`/`year-archive`) match between
+Task 8 resolution, Task 10 table, and the spec. `neowxDateFormatter` signature consistent after the
+Task 7 fix. ✓
