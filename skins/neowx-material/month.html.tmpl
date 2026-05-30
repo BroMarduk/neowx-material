@@ -45,7 +45,7 @@
                                 $month.wind.max $month.wind.gustdir.ordinal_compass <br>
                                 <i class="wi wi-wind from-$month.wind.gustdir.formatted-deg mr-2"
                                 title="$month.wind.gustdir.formatted°" data-toggle="tooltip" data-html="true"></i>
-                                ($month.wind.maxtime.format($Extras.Formatting.datetime))
+                                ($month.wind.maxtime.format($card_datetime))
                             </div>
                         </div>
                     #else if $name == 'rain'
@@ -56,7 +56,7 @@
                             </div>
                             <div class="col-3 text-muted font-small hi-text">
                                 $month.rainRate.max <br>
-                                ($month.rainRate.maxtime.format($Extras.Formatting.datetime))
+                                ($month.rainRate.maxtime.format($card_datetime))
                             </div>
                         </div>
                     #else if $name in set(['lightning_strike_count', 'windrun', 'ET'])
@@ -71,14 +71,14 @@
                         <div class="row">
                             <div class="col-3 text-muted font-small lo-text">
                                 $getVar('month.' + name + '.min') <br>
-                                ($getVar('month.' + name + '.mintime').format($Extras.Formatting.datetime))
+                                ($getVar('month.' + name + '.mintime').format($card_datetime))
                             </div>
                             <div class="col-6">
                                 <h4 class="h2-responsive">$getVar('month.' + name + '.avg')</h4>
                             </div>
                             <div class="col-3 text-muted font-small hi-text">
                                 $getVar('month.' + name + '.max') <br>
-                                ($getVar('month.' + name + '.maxtime').format($Extras.Formatting.datetime))
+                                ($getVar('month.' + name + '.maxtime').format($card_datetime))
                             </div>
                         </div>
                     #end if
@@ -152,6 +152,13 @@
 
         #include "header.inc"
 
+        ## Per-page card date format: CardPageFormats[month] (a datetime_custom_card_* name) -> page default.
+        #set $cpf = $Extras.Formatting.get('CardPageFormats', {})
+        #set $card_key = $cpf.get('month', '')
+        #set global $card_datetime = $Extras.Formatting.get($card_key, $Extras.Formatting.datetime) if $card_key else $Extras.Formatting.datetime
+        #if isinstance($card_datetime, list)
+            #set global $card_datetime = ', '.join($card_datetime)
+        #end if
         <main>
             <div class="container-fluid d-flex-xxl">
 

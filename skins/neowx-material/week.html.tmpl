@@ -37,7 +37,7 @@
                                 $week.wind.max $week.wind.gustdir.ordinal_compass <br>
                                 <i class="wi wi-wind from-$week.wind.gustdir.formatted-deg mr-2"
                                 title="$week.wind.gustdir.formatted°" data-toggle="tooltip" data-html="true"></i>
-                                ($week.wind.maxtime.format($Extras.Formatting.datetime))
+                                ($week.wind.maxtime.format($card_datetime))
                             </div>
                         </div>
                     #else if $name == 'rain'
@@ -48,7 +48,7 @@
                             </div>
                             <div class="col-3 text-muted font-small hi-text">
                                 $week.rainRate.max <br>
-                                ($week.rainRate.maxtime.format($Extras.Formatting.datetime))
+                                ($week.rainRate.maxtime.format($card_datetime))
                             </div>
                         </div>
                     #else if $name in set(['lightning_strike_count', 'windrun', 'ET'])
@@ -63,14 +63,14 @@
                         <div class="row">
                             <div class="col-3 text-muted font-small lo-text">
                                 $getVar('week.' + name + '.min') <br>
-                                ($getVar('week.' + name + '.mintime').format($Extras.Formatting.datetime))
+                                ($getVar('week.' + name + '.mintime').format($card_datetime))
                             </div>
                             <div class="col-6">
                                 <h4 class="h2-responsive">$getVar('week.' + name + '.avg')</h4>
                             </div>
                             <div class="col-3 text-muted font-small hi-text">
                                 $getVar('week.' + name + '.max') <br>
-                                ($getVar('week.' + name + '.maxtime').format($Extras.Formatting.datetime))
+                                ($getVar('week.' + name + '.maxtime').format($card_datetime))
                             </div>
                         </div>
                     #end if
@@ -151,6 +151,13 @@
 
         #include "header.inc"
 
+        ## Per-page card date format: CardPageFormats[week] (a datetime_custom_card_* name) -> page default.
+        #set $cpf = $Extras.Formatting.get('CardPageFormats', {})
+        #set $card_key = $cpf.get('week', '')
+        #set global $card_datetime = $Extras.Formatting.get($card_key, $Extras.Formatting.datetime) if $card_key else $Extras.Formatting.datetime
+        #if isinstance($card_datetime, list)
+            #set global $card_datetime = ', '.join($card_datetime)
+        #end if
         <main>
             <div class="container-fluid d-flex-xxl">
 

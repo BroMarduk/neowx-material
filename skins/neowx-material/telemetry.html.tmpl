@@ -37,7 +37,7 @@
                             #set min_val = $getVar('day.' + name + '.min')
                             #set min_mapped = $mapBatteryValue($name, $min_val)
                             $min_mapped <br>
-                            ($getVar('day.' + name + '.mintime').format($Extras.Formatting.datetime_today))
+                            ($getVar('day.' + name + '.mintime').format($card_datetime))
                         </div>
 
                         <div class="col-6">
@@ -64,7 +64,7 @@
                             #set max_val = $getVar('day.' + name + '.max')
                             #set max_mapped = $mapBatteryValue($name, $max_val)
                             $max_mapped <br>
-                            ($getVar('day.' + name + '.maxtime').format($Extras.Formatting.datetime_today))
+                            ($getVar('day.' + name + '.maxtime').format($card_datetime))
                         </div>
                     </div>
                 </div>
@@ -295,6 +295,13 @@
         #attr $active_nav = ''
         #include "header.inc"
 
+        ## Per-page card date format: CardPageFormats[current] (a datetime_custom_card_* name) -> page default.
+        #set $cpf = $Extras.Formatting.get('CardPageFormats', {})
+        #set $card_key = $cpf.get('current', '')
+        #set global $card_datetime = $Extras.Formatting.get($card_key, $Extras.Formatting.datetime_today) if $card_key else $Extras.Formatting.datetime_today
+        #if isinstance($card_datetime, list)
+            #set global $card_datetime = ', '.join($card_datetime)
+        #end if
         <main>
             <div class="container-fluid d-flex-xxl">
 
