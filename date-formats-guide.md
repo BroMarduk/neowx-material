@@ -49,6 +49,9 @@ literal gibberish on the page.
 | `mm` | **minutes** (lowercase!) | `05` |
 | `A` / `a` | AM/PM / am-pm marker | `PM` / `pm` |
 
+> **Drop a leading zero** by using the single-letter token instead of the double: `D` `M` `H` `h` `m`
+> (instead of `DD` `MM` `HH` `hh` `mm`). Example: `D.M.YYYY H:mm` → `7.3.2026 9:05`.
+
 > ⚠️ In moment, **`MM` is the month** and **`mm` is minutes**. Writing `HH:MM` by mistake is so
 > common that the skin auto-corrects `:MM` → `:mm` for you - but get it right anyway.
 
@@ -65,6 +68,10 @@ literal gibberish on the page.
 | `%I` | hour, 12h | `02` |
 | `%M` | **minutes** | `05` |
 | `%p` | AM/PM marker | `PM` |
+
+> **Drop a leading zero** on Linux/glibc (the usual WeeWX host) by prefixing the token with `-`:
+> `%-d` `%-m` `%-H` `%-I` (instead of `%d` `%m` `%H` `%I`). Example: `%-d.%-m.%Y %-H:%M` → `7.3.2026 9:05`.
+> This is a GNU `strftime` extension and may not work on non-Linux hosts.
 
 > **A note on regional ordering.** The examples in this guide use the European convention - day-first
 > and a 24-hour clock (`DD.MM.YYYY HH:mm` for charts, `%d.%m.%Y %H:%M` for cards). US-style is equally
