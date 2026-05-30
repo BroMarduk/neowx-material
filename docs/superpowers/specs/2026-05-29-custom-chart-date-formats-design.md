@@ -1,11 +1,12 @@
 # Custom chart date formats — design
 
 **Date:** 2026-05-29
-**Status:** Phase 1 (per-custom-chart overrides) implemented in PR #1; Phase 2 (`month-archive` /
-`year-archive` scopes) and Phase 3 (per-page `[[[GraphPageFormats]]]` tier) approved, pending
-implementation.
-**Scope:** Configurable chart date formats on a shared `neowxDateFormatter` helper, as a three-tier
-cascade: global default → per-page default (all charts) → per-custom-chart override.
+**Status:** Phase 1 (per-custom-chart overrides) implemented in PR #1; Phases 2–4 approved, pending
+implementation — Phase 2 (`month-archive` / `year-archive` scopes), Phase 3 (per-page
+`[[[GraphPageFormats]]]` tier), Phase 4 (per-page card formats, `[[[CardPageFormats]]]`).
+**Scope:** Configurable date formats for both **charts** (client-side moment.js, three-tier cascade:
+global → per-page → per-custom-chart) and **cards** (server-side strftime, per-page), driven by named
+formats in `[[Formatting]]` with distinct prefixes (`datetime_custom_graph_*` / `datetime_custom_card_*`).
 
 ## Problem
 
@@ -19,7 +20,7 @@ format per page.
 ## Goal
 
 Give two levels of control over chart date formats, both driven by named formats defined in
-`[[Formatting]]` (convention prefix `datetime_custom_`):
+`[[Formatting]]` (convention prefix `datetime_custom_graph_`):
 
 1. **Per-page default ("all charts").** A `[[[GraphPageFormats]]]` block sets the x-axis label and/or
    tooltip format for **every** chart — built-in *and* custom — on a given page. Supported for all
@@ -31,30 +32,42 @@ Give two levels of control over chart date formats, both driven by named formats
    **whole-block** per-page override (`column` / `values` / per-field maps / date formats) via the
    `*-archive` subsections, which inherit from their base `month` / `year` subsection.
 
-These compose as a cascade — **global default → per-page default → per-chart override** — resolved
-independently for label and tooltip (see [Resolution precedence](#resolution-precedence)).
+For charts these compose as a cascade — **global default → per-page default → per-chart override** —
+resolved independently for label and tooltip (see [Resolution precedence](#resolution-precedence)).
+
+Separately, **cards** (value-card min/max times) gain a **per-page** strftime format via
+`[[[CardPageFormats]]]` — server-side, a distinct path from charts (no moment.js, no per-chart tier).
 
 Out of scope for this spec (see Future work): per-chart overrides for **built-in** charts (the
-per-page tier covers them collectively, but not individually), and value-card / Python-strftime
-date formatting.
+per-page tier covers them collectively, but not individually), per-*card* overrides (cards are
+page-level only), and any non-card Python-strftime date formatting (header/footer, NOAA, etc.).
 
 ## Config schema
 
 ### Named formats (`[[Formatting]]`)
 
-Named formats are ordinary keys in the existing `[[Formatting]]` section. Convention: prefix with
-`datetime_custom_`. Values are moment.js token strings, same dialect as `datetime_graph_label`.
+Named formats are ordinary keys in the existing `[[Formatting]]` section. Two conventions, because the
+two consumers use **different dialects**:
+
+- **`datetime_custom_graph_*`** — moment.js token strings (same dialect as `datetime_graph_label`).
+  Consumed by **charts** (client-side moment.js).
+- **`datetime_custom_card_*`** — Python `strftime` strings (same dialect as `datetime` / `datetime_today`).
+  Consumed by **value cards** (server-side Cheetah).
 
 ```ini
 [[Formatting]]
     ...
-    # Custom named chart date formats (moment.js tokens)
-    datetime_custom_dayonly = ddd DD
-    datetime_custom_full    = ddd DD.MM.YYYY HH:mm
+    # Chart (moment.js) named formats
+    datetime_custom_graph_dayonly = ddd DD
+    datetime_custom_graph_full    = ddd DD.MM.YYYY HH:mm
+    # Card (strftime) named formats
+    datetime_custom_card_daytime  = %H:%M
+    datetime_custom_card_full     = %a %d.%m.%Y %H:%M
 ```
 
-The prefix is a documented convention, **not enforced** — the renderer resolves any key present in
-`[[Formatting]]`.
+The prefixes are a documented convention, **not enforced** — each renderer resolves whatever key it is
+given against `[[Formatting]]`. The two prefixes exist so a moment format is never accidentally fed to
+the strftime (card) path or vice versa, which would render literal garbage.
 
 ### Per-page default (`[[Formatting]]` → `[[[GraphPageFormats]]]`)
 
@@ -65,15 +78,15 @@ values are named formats (same as the per-chart keys).
 ```ini
 [Extras]
   [[Formatting]]
-    datetime_custom_md  = DD.MM
-    datetime_custom_mon = MMM
+    datetime_custom_graph_md  = DD.MM
+    datetime_custom_graph_mon = MMM
 
     [[[GraphPageFormats]]]
         [[[[month]]]]
-            label   = datetime_custom_md     # x-axis on every chart on month.html
-            tooltip = datetime_custom_md      # tooltip on every chart on month.html
+            label   = datetime_custom_graph_md     # x-axis on every chart on month.html
+            tooltip = datetime_custom_graph_md      # tooltip on every chart on month.html
         [[[[year]]]]
-            label   = datetime_custom_mon     # tooltip omitted → page default tooltip
+            label   = datetime_custom_graph_mon     # tooltip omitted → page default tooltip
 ```
 
 Recognized page scopes (all seven): `current`, `yesterday`, `week`, `month`, `month-archive`,
@@ -88,6 +101,37 @@ Recognized page scopes (all seven): `current`, `yesterday`, `week`, `month`, `mo
    archive pages, `datetime_graph_label` elsewhere; tooltip = `datetime_graph_tooltip` everywhere.
 
 So with no `[[[GraphPageFormats]]]` at all, every page renders exactly as today. (Backward compatible.)
+
+### Per-page card formats (`[[Formatting]]` → `[[[CardPageFormats]]]`)
+
+The **cards** (value cards: the min/max time shown under a reading) format dates server-side with
+Python `strftime`, a different path from charts. `[[[CardPageFormats]]]` sets the card date format for
+**all cards on a page**. Cards use a single datetime per timestamp (no label/tooltip split), so each
+page scope maps to one named **card** format (a `datetime_custom_card_*` strftime key).
+
+```ini
+[Extras]
+  [[Formatting]]
+    datetime_custom_card_full = %a %d.%m.%Y %H:%M
+
+    [[[CardPageFormats]]]
+        month = datetime_custom_card_full     # every card's min/max time on month pages
+        year  = datetime_custom_card_full
+```
+
+Recognized page scopes (same seven as charts): `current`, `yesterday`, `week`, `month`,
+`month-archive`, `year`, `year-archive`. (`telemetry` cards also resolve, via the `current` defaults.)
+
+**Defaults and inheritance.** For a given page:
+
+1. Use `[[[CardPageFormats]]][[[[<scope>]]]]`'s named card format if set.
+2. For the two archive scopes, otherwise fall back to the base scope (`month-archive` → `month`,
+   `year-archive` → `year`).
+3. Otherwise use the page's existing built-in card default: `datetime_today` on
+   current / yesterday / telemetry, `datetime` on week / month / month-archive, `datetime_archive` on
+   year / year-archive.
+
+With no `[[[CardPageFormats]]]` at all, every card renders exactly as today. (Backward compatible.)
 
 ### Per-chart usage (`[[Appearance]]` → `[[[customChart*]]]`)
 
@@ -138,10 +182,10 @@ subsection, then to the chart top-level, then to the default. Consequently:
     column    = avg
     [[[[month]]]]
         outTemp = min, max
-        datetime_label_format = datetime_custom_dayonly
+        datetime_label_format = datetime_custom_graph_dayonly
     [[[[month-archive]]]]
         # inherits values/outTemp=min,max from [[[[month]]]]; overrides only the label format
-        datetime_label_format = datetime_custom_monthonly
+        datetime_label_format = datetime_custom_graph_monthonly
 ```
 
 ##### Worked example: template-driven month / year config
@@ -155,9 +199,9 @@ pages spell the year out.
 [Extras]
   [[Formatting]]
     # named moment.js formats used below
-    datetime_custom_md  = DD.MM         # day + month, no year   (rolling pages)
-    datetime_custom_mdy = DD.MM.YYYY    # day + month + year      (fixed archive pages)
-    datetime_custom_mon = MMM           # month abbreviation only
+    datetime_custom_graph_md  = DD.MM         # day + month, no year   (rolling pages)
+    datetime_custom_graph_mdy = DD.MM.YYYY    # day + month + year      (fixed archive pages)
+    datetime_custom_graph_mon = MMM           # month abbreviation only
 
   [[Appearance]]
     [[[customChartOutTemp]]]
@@ -169,18 +213,18 @@ pages spell the year out.
         # --- Month ---
         [[[[month]]]]                    # drives month.html (rolling, current month)
             outTemp = min, max
-            datetime_label_format   = datetime_custom_md
-            datetime_tooltip_format = datetime_custom_md
+            datetime_label_format   = datetime_custom_graph_md
+            datetime_tooltip_format = datetime_custom_graph_md
         [[[[month-archive]]]]            # drives month-%Y-%m.html (a specific past month)
             # inherits values + outTemp=min,max from [[[[month]]]];
             # only the formats differ — show the year because the period is historical
-            datetime_label_format   = datetime_custom_mdy
-            datetime_tooltip_format = datetime_custom_mdy
+            datetime_label_format   = datetime_custom_graph_mdy
+            datetime_tooltip_format = datetime_custom_graph_mdy
 
         # --- Year ---
         [[[[year]]]]                     # drives year.html (rolling, current year)
             outTemp = min, max
-            datetime_label_format = datetime_custom_mon
+            datetime_label_format = datetime_custom_graph_mon
         [[[[year-archive]]]]             # drives year-%Y.html (a specific past year)
             # inherits the MMM label from [[[[year]]]];
             # overrides only the series: a single avg line instead of min/max
@@ -206,11 +250,11 @@ This shows both axes of the merge: the archive month page inherits the **series*
     charttype = area
     values    = outTemp, dewpoint
     column    = avg
-    datetime_label_format   = datetime_custom_dayonly   # x-axis labels (all pages)
-    datetime_tooltip_format = datetime_custom_full       # hover tooltip (all pages)
+    datetime_label_format   = datetime_custom_graph_dayonly   # x-axis labels (all pages)
+    datetime_tooltip_format = datetime_custom_graph_full       # hover tooltip (all pages)
     [[[[week]]]]
         outTemp = min, max
-        datetime_label_format = datetime_custom_full     # per-page override of the label
+        datetime_label_format = datetime_custom_graph_full     # per-page override of the label
 ```
 
 ### Resolution precedence
@@ -396,7 +440,35 @@ In each loop:
 
 The custom-chart **loop** changes touch only custom charts. Built-in and wind/windvec charts are
 affected only indirectly, and only by the **per-page tier**, through the shared base-config rewrite —
-their own rendering code is unchanged. No changes to value cards or the Python strftime path.
+their own rendering code is unchanged.
+
+### Card tier (server-side strftime)
+
+Cards render dates in Cheetah at generation time, e.g. `($getVar('day.' + name + '.maxtime')
+.format($Extras.Formatting.datetime_today))`. There are exactly **4 such call sites per page template**
+(wind max-time, rainRate max-time, generic min-time, generic max-time); `telemetry.html.tmpl` has 2.
+Each page uses a single page-appropriate format today: `datetime_today` (current / yesterday /
+telemetry), `datetime` (week / month / month-archive), `datetime_archive` (year / year-archive).
+
+The change, per template:
+
+1. Resolve a single Cheetah variable once, near the top of the page body — named card format for the
+   page scope (with archive→base inheritance), falling back to that page's existing default:
+
+   ```cheetah
+   ## month.html.tmpl — default is this page's current format ($Extras.Formatting.datetime)
+   #set $cpf = $Extras.Formatting.get('CardPageFormats', {})
+   #set $card_key = $cpf.get('month', '')
+   #set $card_datetime = $Extras.Formatting.get($card_key, $Extras.Formatting.datetime) if $card_key else $Extras.Formatting.datetime
+   ```
+   Archive templates add the base-scope fallback (e.g. `month-archive` → `month`), mirroring the chart
+   archive inheritance. `telemetry.html.tmpl` resolves scope `current` with default `datetime_today`.
+
+2. Replace each `.format($Extras.Formatting.datetime…)` card call site with `.format($card_datetime)`.
+
+No JS, no `neowxDateFormatter`, no `NEOWX_CHART_FORMAT` — this is a self-contained Python/strftime path.
+With no `[[[CardPageFormats]]]`, `$card_datetime` equals the page's current format, so cards render
+unchanged.
 
 ## Error handling
 
@@ -408,7 +480,7 @@ their own rendering code is unchanged. No changes to value cards or the Python s
 
 No automated test harness exists in this skin; verification is manual.
 
-1. Add `datetime_custom_*` formats to `[[Formatting]]` and `datetime_label_format` /
+1. Add `datetime_custom_graph_*` formats to `[[Formatting]]` and `datetime_label_format` /
    `datetime_tooltip_format` to a custom chart, including a per-page override.
 2. Regenerate the report (weewx report generation).
 3. Grep generated page JS to confirm `neowxDateFormatter("<expected moment string>")` is emitted for
@@ -422,7 +494,7 @@ No automated test harness exists in this skin; verification is manual.
    `year-YYYY.html`) uses the archive values; (b) the to-date page (`month.html`, `year.html`) still
    uses the base `[[[[month]]]]` / `[[[[year]]]]` values; (c) a chart with `[[[[month]]]]` but **no**
    `[[[[month-archive]]]]` renders identically on both, proving inheritance/backward-compat.
-7. Per-page tier: add `[[[GraphPageFormats]]][[[[month]]]] label = datetime_custom_md`. Regenerate and
+7. Per-page tier: add `[[[GraphPageFormats]]][[[[month]]]] label = datetime_custom_graph_md`. Regenerate and
    confirm `window.NEOWX_CHART_FORMAT = { label: "DD.MM", … }` is emitted on `month.html`, and that
    **every** chart there — a built-in one (e.g. outTemp), the wind chart, and a custom chart with no
    per-chart override — uses `DD.MM` on the x-axis. Confirm other pages are unchanged.
@@ -436,11 +508,18 @@ No automated test harness exists in this skin; verification is manual.
 10. Global no-op: with **no** `GraphPageFormats` and no per-chart keys, confirm every page's emitted
     `NEOWX_CHART_FORMAT` equals the existing defaults (`datetime_graph_label`/`_archive` +
     `datetime_graph_tooltip`) and all charts render exactly as before.
+11. Cards (Phase 4): define `datetime_custom_card_full = %a %d.%m.%Y %H:%M` and
+    `[[[CardPageFormats]]][[[[month]]]] = datetime_custom_card_full`. Regenerate and confirm the
+    min/max **times under the cards** on `month.html` (and, via inheritance, `month-YYYY-MM.html`)
+    render with the new strftime format, while other pages' cards are unchanged. Negative/no-op: with
+    no `CardPageFormats`, every page's cards match today's output. Confirm a stray
+    `datetime_custom_graph_*` (moment) value used for a card renders literally (documents why the two
+    prefixes exist) — then revert.
 
 ## Future work (informs, not built here)
 
 - **Per-chart override for built-in charts.** Built-in charts have no config block, so giving an
   *individual* built-in chart its own format needs a name→format map (e.g.
-  `[[Charts]] [[[DateFormats]]] outTemp = datetime_custom_full`) consulted in `getChartJsCode`. The
+  `[[Charts]] [[[DateFormats]]] outTemp = datetime_custom_graph_full`) consulted in `getChartJsCode`. The
   per-page tier already covers built-in charts *collectively*; this is only for per-chart granularity
   on built-ins. Would reuse the same `neowxDateFormatter` helper, so no rework of this spec's output.
