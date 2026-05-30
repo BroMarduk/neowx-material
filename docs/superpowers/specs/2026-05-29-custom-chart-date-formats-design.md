@@ -100,6 +100,62 @@ subsection, then to the chart top-level, then to the default. Consequently:
         datetime_label_format = datetime_custom_monthonly
 ```
 
+##### Worked example: template-driven month / year config
+
+A full, self-contained example showing how the to-date subsections (`month`, `year`) and their
+archive counterparts produce different output on the four month/year templates. The motivating idea:
+rolling "to-date" pages omit the year (the period is implied), while the fixed historical archive
+pages spell the year out.
+
+```ini
+[Extras]
+  [[Formatting]]
+    # named moment.js formats used below
+    datetime_custom_md  = DD.MM         # day + month, no year   (rolling pages)
+    datetime_custom_mdy = DD.MM.YYYY    # day + month + year      (fixed archive pages)
+    datetime_custom_mon = MMM           # month abbreviation only
+
+  [[Appearance]]
+    [[[customChartOutTemp]]]
+        title     = Outdoor Temperature
+        charttype = area
+        values    = outTemp, dewpoint
+        column    = avg
+
+        # --- Month ---
+        [[[[month]]]]                    # drives month.html (rolling, current month)
+            outTemp = min, max
+            datetime_label_format   = datetime_custom_md
+            datetime_tooltip_format = datetime_custom_md
+        [[[[month-archive]]]]            # drives month-%Y-%m.html (a specific past month)
+            # inherits values + outTemp=min,max from [[[[month]]]];
+            # only the formats differ — show the year because the period is historical
+            datetime_label_format   = datetime_custom_mdy
+            datetime_tooltip_format = datetime_custom_mdy
+
+        # --- Year ---
+        [[[[year]]]]                     # drives year.html (rolling, current year)
+            outTemp = min, max
+            datetime_label_format = datetime_custom_mon
+        [[[[year-archive]]]]             # drives year-%Y.html (a specific past year)
+            # inherits the MMM label from [[[[year]]]];
+            # overrides only the series: a single avg line instead of min/max
+            outTemp = avg
+```
+
+Resulting render per template:
+
+| Template            | Series for `outTemp`     | x-axis label / tooltip      | Source                                              |
+|---------------------|--------------------------|-----------------------------|-----------------------------------------------------|
+| `month.html`        | min + max                | `DD.MM`                     | `[[[[month]]]]`                                     |
+| `month-%Y-%m.html`  | min + max *(inherited)*  | `DD.MM.YYYY` *(overridden)* | `[[[[month]]]]` ⊕ `[[[[month-archive]]]]`           |
+| `year.html`         | min + max                | `MMM` (label), default tooltip | `[[[[year]]]]`                                  |
+| `year-%Y.html`      | avg *(overridden)*       | `MMM` *(inherited)*, default tooltip | `[[[[year]]]]` ⊕ `[[[[year-archive]]]]`     |
+
+This shows both axes of the merge: the archive month page inherits the **series** and overrides the
+**date format**, while the archive year page inherits the **date format** and overrides the
+**series** — each archive page changing only what it declares and inheriting the rest.
+
 ```ini
 [[[customChartOutTemp]]]
     title     = Outdoor Temperature
