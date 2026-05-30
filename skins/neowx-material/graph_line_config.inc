@@ -51,11 +51,7 @@ xaxis: {
         hideOverlappingLabels: true,
         showDuplicates: false,
         trim: true,
-        formatter: function(val, timestamp) {
-            var fmt = "$Extras.Formatting.datetime_graph_label";
-            fmt = fmt.replace(/:MM/g, ':mm');
-            return moment.unix(timestamp).format(fmt);
-        }
+        formatter: neowxDateFormatter(NEOWX_CHART_FORMAT.label)
     }
 },
 
@@ -77,10 +73,6 @@ grid: {
 
 tooltip: {
     x: {
-        formatter: function(val) {
-           var fmt = "$Extras.Formatting.datetime_graph_tooltip";
-           fmt = fmt.replace(/:MM/g, ':mm');
-           return moment.unix(val).format(fmt);
-        }
+        formatter: neowxDateFormatter(NEOWX_CHART_FORMAT.tooltip)
     }
 },

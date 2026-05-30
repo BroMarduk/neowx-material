@@ -23,11 +23,6 @@ xaxis: {
 },
 tooltip: {
     x: {
-        formatter: function(value, { series, seriesIndex, dataPointIndex, w }) {
-            var fmt = "$Extras.Formatting.datetime_graph_tooltip";
-            fmt = fmt.replace(/:MM/g, ':mm');
-            // the first argument is 'value' (timestamp), use that
-            return moment.unix(value).format(fmt);
-        }
+        formatter: neowxDateFormatter(NEOWX_CHART_FORMAT.tooltip)
     }
 },

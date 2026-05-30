@@ -21,23 +21,11 @@ xaxis: {
     hideOverlappingLabels: true,
     tickAmount: 8,
     labels: {
-        formatter: function(val, timestamp) {
-            var fmt = "$Extras.Formatting.datetime_graph_label";
-            // If the format uses uppercase MM for minutes (common mistake), convert
-            // only occurrences of ":MM" to Moment's minutes token ":mm" so we don't
-            // change months (MM) to minutes.
-            fmt = fmt.replace(/:MM/g, ':mm');
-            return moment.unix(timestamp).format(fmt);
-        }
+        formatter: neowxDateFormatter(NEOWX_CHART_FORMAT.label)
     }
 },
 tooltip: {
     x: {
-        formatter: function(val) {
-            var fmt = "$Extras.Formatting.datetime_graph_tooltip";
-            // convert minute token if needed (':MM' -> ':mm')
-            fmt = fmt.replace(/:MM/g, ':mm');
-            return moment.unix(val).format(fmt);
-        }
+        formatter: neowxDateFormatter(NEOWX_CHART_FORMAT.tooltip)
     }
 },
