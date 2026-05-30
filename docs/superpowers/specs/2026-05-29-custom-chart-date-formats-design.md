@@ -1,9 +1,11 @@
 # Custom chart date formats — design
 
 **Date:** 2026-05-29
-**Status:** Approved for planning
-**Scope:** Per-chart date-format overrides for custom charts (`customChart*`), built on a shared
-JS helper so a future per-page "all charts" tier is a clean follow-on.
+**Status:** Phase 1 (per-custom-chart overrides) implemented in PR #1; Phase 2 (`month-archive` /
+`year-archive` scopes) and Phase 3 (per-page `[[[GraphPageFormats]]]` tier) approved, pending
+implementation.
+**Scope:** Configurable chart date formats on a shared `neowxDateFormatter` helper, as a three-tier
+cascade: global default → per-page default (all charts) → per-custom-chart override.
 
 ## Problem
 
@@ -16,16 +18,25 @@ format per page.
 
 ## Goal
 
-Let a custom chart declare a named date format — defined in `[[Formatting]]` with the
-`datetime_custom_` convention prefix — and override the chart's x-axis labels and/or tooltip date,
-at chart level and at the per-page override level (`[[[[current]]]]`, `[[[[yesterday]]]]`,
-`[[[[week]]]]`, `[[[[month]]]]`, `[[[[month-archive]]]]`, `[[[[year]]]]`, `[[[[year-archive]]]]`).
-The two per-period archive pages additionally support a **whole-block** per-page override
-(`column` / `values` / per-field maps / date formats) via the `*-archive` subsections, which inherit
-from their base `month` / `year` subsection.
+Give two levels of control over chart date formats, both driven by named formats defined in
+`[[Formatting]]` (convention prefix `datetime_custom_`):
 
-Out of scope for this spec (see Future work): per-page "all charts" overrides, per-chart overrides
-for built-in charts, and value-card / Python-strftime date formatting.
+1. **Per-page default ("all charts").** A `[[[GraphPageFormats]]]` block sets the x-axis label and/or
+   tooltip format for **every** chart — built-in *and* custom — on a given page. Supported for all
+   seven page scopes (`current`, `yesterday`, `week`, `month`, `month-archive`, `year`,
+   `year-archive`).
+2. **Per-custom-chart override.** A `customChart*` declares `datetime_label_format` /
+   `datetime_tooltip_format` to override its own x-axis labels and/or tooltip, at chart level or
+   inside a per-page override subsection. The two per-period archive pages additionally support a
+   **whole-block** per-page override (`column` / `values` / per-field maps / date formats) via the
+   `*-archive` subsections, which inherit from their base `month` / `year` subsection.
+
+These compose as a cascade — **global default → per-page default → per-chart override** — resolved
+independently for label and tooltip (see [Resolution precedence](#resolution-precedence)).
+
+Out of scope for this spec (see Future work): per-chart overrides for **built-in** charts (the
+per-page tier covers them collectively, but not individually), and value-card / Python-strftime
+date formatting.
 
 ## Config schema
 
@@ -44,6 +55,39 @@ Named formats are ordinary keys in the existing `[[Formatting]]` section. Conven
 
 The prefix is a documented convention, **not enforced** — the renderer resolves any key present in
 `[[Formatting]]`.
+
+### Per-page default (`[[Formatting]]` → `[[[GraphPageFormats]]]`)
+
+A new optional sub-section sets the date format for **all charts on a page** — built-in and custom
+alike. It contains one subsection per page scope, each with optional `label` and `tooltip` keys whose
+values are named formats (same as the per-chart keys).
+
+```ini
+[Extras]
+  [[Formatting]]
+    datetime_custom_md  = DD.MM
+    datetime_custom_mon = MMM
+
+    [[[GraphPageFormats]]]
+        [[[[month]]]]
+            label   = datetime_custom_md     # x-axis on every chart on month.html
+            tooltip = datetime_custom_md      # tooltip on every chart on month.html
+        [[[[year]]]]
+            label   = datetime_custom_mon     # tooltip omitted → page default tooltip
+```
+
+Recognized page scopes (all seven): `current`, `yesterday`, `week`, `month`, `month-archive`,
+`year`, `year-archive`. Each `label` / `tooltip` is independent and optional.
+
+**Defaults and inheritance.** For a given page and slot (label or tooltip):
+
+1. Use `[[[GraphPageFormats]]][[[[<scope>]]]]`'s `label`/`tooltip` if set.
+2. For the two archive scopes, otherwise fall back to the base scope's value
+   (`month-archive` → `month`, `year-archive` → `year`).
+3. Otherwise use the page's existing built-in default: label = `datetime_graph_archive` on the two
+   archive pages, `datetime_graph_label` elsewhere; tooltip = `datetime_graph_tooltip` everywhere.
+
+So with no `[[[GraphPageFormats]]]` at all, every page renders exactly as today. (Backward compatible.)
 
 ### Per-chart usage (`[[Appearance]]` → `[[[customChart*]]]`)
 
@@ -171,20 +215,28 @@ This shows both axes of the merge: the archive month page inherits the **series*
 
 ### Resolution precedence
 
-Evaluated independently for label and tooltip, per page render:
+The effective label/tooltip format for a chart is a three-tier cascade, evaluated independently for
+label and tooltip, per page render. Highest priority first:
 
-1. Per-page override subsection key. On the two **archive** pages this is the merged subsection, so
-   the order within this tier is: `[[[[month-archive]]]]`/`[[[[year-archive]]]]` key →
-   `[[[[month]]]]`/`[[[[year]]]]` key. On all other pages it is simply that page's subsection key.
-2. Chart top-level key
-3. **Unset → inherit the page's existing default** (`datetime_graph_label` / `datetime_graph_tooltip`,
-   or `datetime_graph_archive` on archive pages) — i.e. no override is emitted.
+1. **Per-chart override** (custom charts only). The `datetime_label_format` / `datetime_tooltip_format`
+   resolved from the chart's per-page subsection then chart top-level. On the two **archive** pages the
+   subsection is the merged one, so within this tier the order is
+   `[[[[month-archive]]]]`/`[[[[year-archive]]]]` key → `[[[[month]]]]`/`[[[[year]]]]` key → chart
+   top-level key. Emitted as an explicit per-chart `xaxis`/`tooltip` override.
+2. **Per-page default** — `[[[GraphPageFormats]]][[[[<scope>]]]]`'s `label`/`tooltip`, with
+   archive→base inheritance (`month-archive` → `month`, `year-archive` → `year`). Applies to every
+   chart on the page (built-in and custom) via the shared base config.
+3. **Page built-in default** — `datetime_graph_label` (or `datetime_graph_archive` on archive pages)
+   for the axis, `datetime_graph_tooltip` for the tooltip.
 
-A blank value, or a name not found in `[[Formatting]]`, falls back to tier 3 silently (no crash,
-no JS error).
+A blank value, or a name not found in `[[Formatting]]`, is treated as unset and falls through to the
+next tier silently (no crash, no JS error). With no new config at all, every chart resolves to tier 3
+— identical to today.
 
-The same merge governs the non-date keys (`column`, `values`, per-field maps) on archive pages, since
-they all read from the same resolved per-page config.
+Tiers 2 and 3 are realized as the page's `NEOWX_CHART_FORMAT` (which the base chart config reads);
+tier 1 is the per-chart `xaxis`/`tooltip` block emitted on top of the spread (see Renderer design).
+For custom charts, the per-chart whole-block merge also governs the non-date keys (`column`,
+`values`, per-field maps) on archive pages, since they read from the same resolved per-page config.
 
 ## Renderer design
 
@@ -205,8 +257,71 @@ function neowxDateFormatter(fmt) {
 }
 ```
 
-This helper is the foundation for all three tiers of the eventual cascade (see Future work); the
-current feature uses it only for per-chart overrides.
+This helper is the foundation for **all three tiers** of the cascade — the base config formatters
+(tiers 2/3) and the per-chart override (tier 1) both call it.
+
+### Per-page tier — `NEOWX_CHART_FORMAT` + base config rewrite
+
+The per-page default is realized once per page as a small JS object that the base chart configs read.
+
+**1. Each template declares its page scope before including `js.inc`:**
+
+```cheetah
+#set $neowx_page_scope = 'month'      ## index→current, yesterday, week, month, year;
+#include "js.inc"                      ## month-%Y-%m→month-archive, year-%Y→year-archive
+```
+
+**2. `js.inc` resolves the page's effective formats and emits them** (one place; runs for every page
+that includes `js.inc`, so pages without charts and pages with no `GraphPageFormats` still get valid
+defaults):
+
+```cheetah
+## scope, with archive→base fallback for the GraphPageFormats lookup
+#set $gpf = $Extras.Formatting.get('GraphPageFormats', {})
+#set $scope = $getVar('neowx_page_scope', '')
+#set $base_scope = 'month' if $scope == 'month-archive' else ('year' if $scope == 'year-archive' else $scope)
+#set $is_archive = $scope in ('month-archive', 'year-archive')
+## label/tooltip named-key: scope → base scope (archive only) → ''
+#set $lbl_key = $gpf.get($scope, {}).get('label',   $gpf.get($base_scope, {}).get('label',   '')) if $scope else ''
+#set $tip_key = $gpf.get($scope, {}).get('tooltip', $gpf.get($base_scope, {}).get('tooltip', '')) if $scope else ''
+## resolve to a moment string, else the page built-in default
+#set $lbl_default = $Extras.Formatting.datetime_graph_archive if $is_archive else $Extras.Formatting.datetime_graph_label
+#set $lbl_fmt = $Extras.Formatting.get($lbl_key, '') if $lbl_key else ''
+#set $tip_fmt = $Extras.Formatting.get($tip_key, '') if $tip_key else ''
+#if not $lbl_fmt
+    #set $lbl_fmt = $lbl_default
+#end if
+#if not $tip_fmt
+    #set $tip_fmt = $Extras.Formatting.datetime_graph_tooltip
+#end if
+```
+```js
+window.NEOWX_CHART_FORMAT = { label: "$lbl_fmt", tooltip: "$tip_fmt" };
+```
+
+(The `', '.join(...)` list-coercion used for the per-chart keys applies here too if a named format
+value contains a comma.)
+
+**3. The base config `.inc` formatters read `NEOWX_CHART_FORMAT`** instead of baking the literal.
+Affected files: `graph_area_config.inc`, `graph_line_config.inc`, `graph_bar_config.inc`, their
+three `_archive_` variants, and `graph_radar_config.inc` (tooltip only). Each formatter changes from:
+
+```js
+formatter: function (val, timestamp) {
+    var fmt = "$Extras.Formatting.datetime_graph_label";   // (or _archive / _tooltip)
+    fmt = fmt.replace(/:MM/g, ':mm');
+    return moment.unix(timestamp).format(fmt);
+}
+```
+to:
+```js
+formatter: neowxDateFormatter(NEOWX_CHART_FORMAT.label)     // tooltip uses .tooltip
+```
+
+Because every chart — built-in, special (wind/windvec), and custom — spreads `...graph_${type}_config`,
+they all pick up the page format with no per-chart edits. The archive `.inc` files map their label
+default into `NEOWX_CHART_FORMAT.label` (js.inc seeds it with `datetime_graph_archive` for archive
+scopes), so existing archive behavior is preserved when no `GraphPageFormats` is set.
 
 ### Custom-chart loop changes (7 templates)
 
@@ -276,9 +391,12 @@ In each loop:
    Object-literal key order guarantees these override the spread's defaults. The base configs for
    all custom-chart types (`area`, `bar`, `line`) and their archive variants all expose
    `xaxis.labels.formatter` and `tooltip.x.formatter`, so the merge is uniform across pages and types.
+   Because the spread's formatter now reads `NEOWX_CHART_FORMAT` (tier 2/3), this per-chart block
+   correctly sits on top as tier 1.
 
-No changes to value cards, built-in charts, the wind/windvec special charts, or the Python strftime
-path.
+The custom-chart **loop** changes touch only custom charts. Built-in and wind/windvec charts are
+affected only indirectly, and only by the **per-page tier**, through the shared base-config rewrite —
+their own rendering code is unchanged. No changes to value cards or the Python strftime path.
 
 ## Error handling
 
@@ -298,31 +416,31 @@ No automated test harness exists in this skin; verification is manual.
 4. Open the pages in a browser; confirm x-axis labels and tooltip render with the chosen format, and
    that charts without the keys are unchanged.
 5. Negative case: reference an undefined key → chart falls back to the default format, no console error.
-6. Archive merge: add a `[[[[month-archive]]]]` (and `[[[[year-archive]]]]`) subsection that sets a
-   *different* `datetime_label_format` and one differing non-date key (e.g. a per-field `outTemp =
-   avg`). Regenerate and confirm: (a) the archive page (`month-YYYY-MM.html`, `year-YYYY.html`) uses
-   the archive values; (b) the to-date page (`month.html`, `year.html`) still uses the base
-   `[[[[month]]]]` / `[[[[year]]]]` values; (c) a chart with `[[[[month]]]]` but **no**
+6. Archive merge (per-chart): add a `[[[[month-archive]]]]` (and `[[[[year-archive]]]]`) subsection
+   that sets a *different* `datetime_label_format` and one differing non-date key (e.g. a per-field
+   `outTemp = avg`). Regenerate and confirm: (a) the archive page (`month-YYYY-MM.html`,
+   `year-YYYY.html`) uses the archive values; (b) the to-date page (`month.html`, `year.html`) still
+   uses the base `[[[[month]]]]` / `[[[[year]]]]` values; (c) a chart with `[[[[month]]]]` but **no**
    `[[[[month-archive]]]]` renders identically on both, proving inheritance/backward-compat.
+7. Per-page tier: add `[[[GraphPageFormats]]][[[[month]]]] label = datetime_custom_md`. Regenerate and
+   confirm `window.NEOWX_CHART_FORMAT = { label: "DD.MM", … }` is emitted on `month.html`, and that
+   **every** chart there — a built-in one (e.g. outTemp), the wind chart, and a custom chart with no
+   per-chart override — uses `DD.MM` on the x-axis. Confirm other pages are unchanged.
+8. Cascade precedence: with the tier-7 page default in place, add a per-chart
+   `datetime_label_format` to one custom chart on the month page and confirm that chart uses the
+   per-chart format while its neighbours still use the page default.
+9. Per-page archive inheritance: set only `[[[GraphPageFormats]]][[[[month]]]] label` (no
+   `month-archive`) and confirm `month-YYYY-MM.html` inherits it; then add
+   `[[[[month-archive]]]] label` and confirm the archive page switches to it while `month.html` keeps
+   the base.
+10. Global no-op: with **no** `GraphPageFormats` and no per-chart keys, confirm every page's emitted
+    `NEOWX_CHART_FORMAT` equals the existing defaults (`datetime_graph_label`/`_archive` +
+    `datetime_graph_tooltip`) and all charts render exactly as before.
 
 ## Future work (informs, not built here)
 
-The 3-tier cascade this enables: **global default → per-page default → per-chart override**, resolved
-independently for label and tooltip.
-
-- **Per-page "all charts" tier.** Resolve a per-page label/tooltip format once in each template
-  (global → per-page key) and emit it as `window.NEOWX_CHART_FORMAT = { label, tooltip }`. Change the
-  base `graph_*_config.inc` formatters from the baked `$Extras.Formatting.datetime_graph_label`
-  literal to `neowxDateFormatter(NEOWX_CHART_FORMAT.label)`. Every chart (built-in and custom) then
-  picks up the per-page format for free. Config under e.g. `[[Formatting]] [[[GraphPageFormats]]]`
-  with `[[[[week]]]] label = …, tooltip = …` subsections.
-- **Per-chart override for built-in charts.** Built-in charts have no config block, so this needs a
-  name→format map (e.g. `[[Charts]] [[[DateFormats]]] outTemp = datetime_custom_full`) consulted in
-  `getChartJsCode`. Heaviest piece; only if per-chart granularity on built-ins is wanted.
-
-> The previously-listed "separate archive scopes" item is now **in scope** — see
-> [Supported per-page override subsections](#supported-per-page-override-subsections). It is
-> implemented as `[[[[month-archive]]]]` / `[[[[year-archive]]]]` with inheritance from the base
-> subsection.
-
-Both reuse the same `neowxDateFormatter` helper, so no rework of this spec's output is required.
+- **Per-chart override for built-in charts.** Built-in charts have no config block, so giving an
+  *individual* built-in chart its own format needs a name→format map (e.g.
+  `[[Charts]] [[[DateFormats]]] outTemp = datetime_custom_full`) consulted in `getChartJsCode`. The
+  per-page tier already covers built-in charts *collectively*; this is only for per-chart granularity
+  on built-ins. Would reuse the same `neowxDateFormatter` helper, so no rework of this spec's output.
