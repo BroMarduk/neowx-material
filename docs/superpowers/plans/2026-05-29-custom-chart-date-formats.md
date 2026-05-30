@@ -776,29 +776,54 @@ git commit -m "Declare per-page chart-format scope in the 7 chart templates"
 ```
 End the body with the `Co-Authored-By` trailer.
 
-## Task 11: Document `GraphPageFormats` (and archive scopes) in `skin.conf`
+## Task 11: Rename chart format convention to `datetime_custom_graph_*` + document `GraphPageFormats`
 
 **Files:**
-- Modify: `skins/neowx-material/skin.conf` (the `[[Formatting]]` documentation block added in Phase 1
-  Task 4).
+- Modify: `skins/neowx-material/skin.conf`
 
-- [ ] **Step 1: Add the `GraphPageFormats` doc + example.** Find:
+The Phase 1 docs used the bare `datetime_custom_` convention. We now distinguish chart (moment) from
+card (strftime) named formats by prefix: chart formats become `datetime_custom_graph_*`. This task
+renames the two example chart formats wherever they appear in `skin.conf`, then adds the
+`GraphPageFormats` documentation. (Card named formats `datetime_custom_card_*` are added in Phase 4.)
+
+- [ ] **Step 1: Rename the two chart example names everywhere in `skin.conf` (replace-all).**
+
+Replace every occurrence of:
+```
+datetime_custom_dayonly
+```
+with:
+```
+datetime_custom_graph_dayonly
+```
+and every occurrence of:
+```
+datetime_custom_full
+```
+with:
+```
+datetime_custom_graph_full
+```
+(These appear in the `[[Formatting]]` doc block, the per-chart usage comment, and the
+`customChartOutTemp` example — all commented-out, so this is documentation only.)
+
+- [ ] **Step 2: Add the `GraphPageFormats` doc + example.** Find (now renamed):
 
 ```
-        # datetime_custom_dayonly = ddd DD
-        # datetime_custom_full    = ddd DD.MM.YYYY HH:mm
+        # datetime_custom_graph_dayonly = ddd DD
+        # datetime_custom_graph_full    = ddd DD.MM.YYYY HH:mm
 ```
 Replace with:
 ```
-        # datetime_custom_dayonly = ddd DD
-        # datetime_custom_full    = ddd DD.MM.YYYY HH:mm
+        # datetime_custom_graph_dayonly = ddd DD
+        # datetime_custom_graph_full    = ddd DD.MM.YYYY HH:mm
 
         # Per-page chart date formats (apply to ALL charts on a page)
         # ---------------------------------------------------------------------
         # Set the x-axis label and/or tooltip date format for EVERY chart
-        # (built-in and custom) on a page. Values are named formats from above.
-        # A per-chart datetime_label_format / datetime_tooltip_format still
-        # overrides these for that one chart.
+        # (built-in and custom) on a page. Values are datetime_custom_graph_*
+        # names from above. A per-chart datetime_label_format /
+        # datetime_tooltip_format still overrides these for that one chart.
         #
         # Page scopes: current, yesterday, week, month, month-archive, year,
         # year-archive. The two *-archive scopes inherit from month / year when
@@ -808,13 +833,13 @@ Replace with:
         #
         # [[[GraphPageFormats]]]
         #     [[[[month]]]]
-        #         label   = datetime_custom_dayonly
-        #         tooltip = datetime_custom_full
+        #         label   = datetime_custom_graph_dayonly
+        #         tooltip = datetime_custom_graph_full
         #     [[[[year]]]]
-        #         label   = datetime_custom_dayonly
+        #         label   = datetime_custom_graph_dayonly
 ```
 
-- [ ] **Step 2: Update the per-chart scope list comment** to include the archive scopes. Find:
+- [ ] **Step 3: Update the per-chart scope list comment** to include the archive scopes. Find:
 
 ```
         # These keys work at chart level and inside a per-page override
@@ -831,18 +856,20 @@ Replace with:
         # Avoid commas inside a format value.
 ```
 
-- [ ] **Step 3: Verify parse** (skip if `configobj` unavailable)
+- [ ] **Step 4: Verify**
 
 ```bash
-python -c "import configobj; configobj.ConfigObj('skins/neowx-material/skin.conf', file_error=True); print('skin.conf parses OK')"
+grep -c "datetime_custom_graph_" skins/neowx-material/skin.conf   # expect >= 6
+grep -c "datetime_custom_dayonly\|datetime_custom_full" skins/neowx-material/skin.conf   # expect 0 (renamed)
+grep -n "GraphPageFormats" skins/neowx-material/skin.conf          # doc block present
+python -c "import configobj; configobj.ConfigObj('skins/neowx-material/skin.conf', file_error=True); print('skin.conf parses OK')" 2>/dev/null || echo "(configobj not installed — skip parse check)"
 ```
-Expected: `skin.conf parses OK`.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add skins/neowx-material/skin.conf
-git commit -m "Document GraphPageFormats per-page chart date formats in skin.conf"
+git commit -m "Rename chart format convention to datetime_custom_graph_* and document GraphPageFormats"
 ```
 End the body with the `Co-Authored-By` trailer.
 
@@ -861,11 +888,11 @@ Behavioral acceptance for the archive scopes and per-page tier. Requires a live 
 
 - [ ] **Step 2: Per-page tier.** Add to `[[Formatting]]`:
   ```
-  datetime_custom_md = DD.MM
+  datetime_custom_graph_md = DD.MM
   [[[GraphPageFormats]]]
       [[[[month]]]]
-          label   = datetime_custom_md
-          tooltip = datetime_custom_md
+          label   = datetime_custom_graph_md
+          tooltip = datetime_custom_graph_md
   ```
   Regenerate. Confirm `month.html` emits `NEOWX_CHART_FORMAT = { label: "DD.MM", tooltip: "DD.MM" }`,
   and in a browser **every** chart on `month.html` — a built-in one (e.g. outTemp), the wind chart,
@@ -874,12 +901,12 @@ Behavioral acceptance for the archive scopes and per-page tier. Requires a live 
 
 - [ ] **Step 3: Cascade precedence.** Keep Step 2's page default and add a per-chart override to one
   custom chart on the month page (`[[[customChartOutTemp]]] [[[[month]]]] datetime_label_format =
-  datetime_custom_full`, with `datetime_custom_full` defined). Regenerate. Confirm that chart uses the
-  per-chart format while its neighbours still use the page default `DD.MM`.
+  datetime_custom_graph_full`, with `datetime_custom_graph_full` defined). Regenerate. Confirm that
+  chart uses the per-chart format while its neighbours still use the page default `DD.MM`.
 
 - [ ] **Step 4: Per-page archive inheritance.** With only `[[[[month]]]] label` set under
   `GraphPageFormats` (no `month-archive`), confirm `month-YYYY-MM.html` inherits `DD.MM`. Then add
-  `[[[GraphPageFormats]]][[[[month-archive]]]] label = datetime_custom_full`; confirm the archive page
+  `[[[GraphPageFormats]]][[[[month-archive]]]] label = datetime_custom_graph_full`; confirm the archive page
   switches to it while `month.html` keeps `DD.MM`.
 
 - [ ] **Step 5: Per-chart archive merge (Phase 2).** On a custom chart, set `[[[[month]]]] outTemp =
@@ -915,3 +942,189 @@ Behavioral acceptance for the archive scopes and per-page tier. Requires a live 
 strings (`current`/`yesterday`/`week`/`month`/`month-archive`/`year`/`year-archive`) match between
 Task 8 resolution, Task 10 table, and the spec. `neowxDateFormatter` signature consistent after the
 Task 7 fix. ✓
+
+---
+
+# Phase 4 — Per-page card formats (`CardPageFormats`, strftime)
+
+**Goal:** Let `[[[CardPageFormats]]]` set the value-card min/max-time date format for every card on a
+page, for all page scopes, with archive→base inheritance. Server-side (Python strftime) — a separate
+path from charts.
+
+**Architecture:** Each card-bearing template resolves one `#set global $card_datetime` near the top of
+its body (named **card** format for the page scope → page default), then the existing
+`.format($Extras.Formatting.datetime…)` card call sites use `.format($card_datetime)`. `#set global`
+is required so the value inside the `#def`-based card renderers can see it. No JS; no
+`neowxDateFormatter`. With no `CardPageFormats`, `$card_datetime` equals the page's current format.
+
+## Task 13: Resolve `$card_datetime` and swap card call sites (8 templates)
+
+**Files & per-template parameters:**
+
+| Template                 | scope (key)      | archive base | page default (`$Extras.Formatting.…`) | call sites (lines) | `.format(…)` literal to swap |
+|--------------------------|------------------|--------------|----------------------------------------|--------------------|------------------------------|
+| `index.html.tmpl`        | `current`        | —            | `datetime_today`                       | 153,169,196,203    | `.format($Extras.Formatting.datetime_today)` |
+| `yesterday.html.tmpl`    | `yesterday`      | —            | `datetime_today`                       | 40,51,66,73        | `.format($Extras.Formatting.datetime_today)` |
+| `telemetry.html.tmpl`    | `current`        | —            | `datetime_today`                       | 40,67              | `.format($Extras.Formatting.datetime_today)` |
+| `week.html.tmpl`         | `week`           | —            | `datetime`                             | 40,51,66,73        | `.format($Extras.Formatting.datetime)` |
+| `month.html.tmpl`        | `month`          | —            | `datetime`                             | 48,59,74,81        | `.format($Extras.Formatting.datetime)` |
+| `month-%Y-%m.html.tmpl`  | `month-archive`  | `month`      | `datetime`                             | 48,63,83,90        | `.format($Extras.Formatting.datetime)` |
+| `year.html.tmpl`         | `year`           | —            | `datetime_archive`                     | 48,63,83,90        | `.format($Extras.Formatting.datetime_archive)` |
+| `year-%Y.html.tmpl`      | `year-archive`   | `year`       | `datetime_archive`                     | 48,63,83,90        | `.format($Extras.Formatting.datetime_archive)` |
+
+For EACH template, two edits:
+
+**Edit 1 — insert the resolution block immediately before the `<main>` tag** (it must run before any
+card renders; `#set global` makes it visible inside the card `#def`s). Non-archive template form
+(substitute `<scope>` and `<default>` from the table):
+
+```cheetah
+## Per-page card date format: CardPageFormats[<scope>] (a datetime_custom_card_* name) → page default.
+## #set global so the value is visible inside the card #def renderers.
+#set $cpf = $Extras.Formatting.get('CardPageFormats', {})
+#set $card_key = $cpf.get('<scope>', '')
+#set global $card_datetime = $Extras.Formatting.get($card_key, $Extras.Formatting.<default>) if $card_key else $Extras.Formatting.<default>
+#if isinstance($card_datetime, list)
+    #set global $card_datetime = ', '.join($card_datetime)
+#end if
+```
+
+For the two **archive** templates (`month-%Y-%m`, `year-%Y`), use the archive→base fallback on the key
+line instead (substitute `<archive-scope>` / `<base-scope>` from the table):
+
+```cheetah
+#set $card_key = $cpf.get('<archive-scope>', $cpf.get('<base-scope>', ''))
+```
+
+**Edit 2 — swap the call sites (replace-all the template's `.format(…)` literal from the table):**
+
+Replace every occurrence of that template's literal (e.g. for `month.html.tmpl`):
+```
+.format($Extras.Formatting.datetime)
+```
+with:
+```
+.format($card_datetime)
+```
+(The literal includes the closing `)`, so `…datetime)` does not match `…datetime_today)` or
+`…datetime_archive)` — only the intended sites are swapped.)
+
+- [ ] **Step 1:** `index.html.tmpl` — Edit 1 (scope `current`, default `datetime_today`); Edit 2 (swap `datetime_today`, 4 sites).
+- [ ] **Step 2:** `yesterday.html.tmpl` — Edit 1 (`yesterday`, `datetime_today`); Edit 2 (`datetime_today`, 4).
+- [ ] **Step 3:** `telemetry.html.tmpl` — Edit 1 (`current`, `datetime_today`); Edit 2 (`datetime_today`, 2).
+- [ ] **Step 4:** `week.html.tmpl` — Edit 1 (`week`, `datetime`); Edit 2 (`datetime`, 4).
+- [ ] **Step 5:** `month.html.tmpl` — Edit 1 (`month`, `datetime`); Edit 2 (`datetime`, 4).
+- [ ] **Step 6:** `month-%Y-%m.html.tmpl` — Edit 1 archive form (`month-archive`→`month`, default `datetime`); Edit 2 (`datetime`, 4).
+- [ ] **Step 7:** `year.html.tmpl` — Edit 1 (`year`, `datetime_archive`); Edit 2 (`datetime_archive`, 4).
+- [ ] **Step 8:** `year-%Y.html.tmpl` — Edit 1 archive form (`year-archive`→`year`, default `datetime_archive`); Edit 2 (`datetime_archive`, 4).
+
+- [ ] **Step 9: Verify**
+
+```bash
+cd skins/neowx-material
+grep -c "card_datetime = \$Extras.Formatting" index.html.tmpl yesterday.html.tmpl telemetry.html.tmpl week.html.tmpl month.html.tmpl "month-%Y-%m.html.tmpl" year.html.tmpl "year-%Y.html.tmpl"   # >=1 each
+grep -c "\.format(\$card_datetime)" index.html.tmpl yesterday.html.tmpl telemetry.html.tmpl week.html.tmpl month.html.tmpl "month-%Y-%m.html.tmpl" year.html.tmpl "year-%Y.html.tmpl"   # 4 each except telemetry=2
+grep -rn "\.format(\$Extras.Formatting.datetime" *.tmpl   # expect NO matches (all swapped)
+```
+Expected: every card-bearing template has the resolution line; `.format($card_datetime)` counts are
+4 (telemetry 2); the last grep returns nothing (no remaining direct `datetime*` card formats).
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add skins/neowx-material/index.html.tmpl skins/neowx-material/yesterday.html.tmpl skins/neowx-material/telemetry.html.tmpl skins/neowx-material/week.html.tmpl skins/neowx-material/month.html.tmpl "skins/neowx-material/month-%Y-%m.html.tmpl" skins/neowx-material/year.html.tmpl "skins/neowx-material/year-%Y.html.tmpl"
+git commit -m "Add per-page card date format ($card_datetime) to card templates"
+```
+End the body with the `Co-Authored-By` trailer.
+
+## Task 14: Document `CardPageFormats` + card named formats in `skin.conf`
+
+**Files:**
+- Modify: `skins/neowx-material/skin.conf` (the `[[Formatting]]` doc area, after the `GraphPageFormats`
+  block added in Task 11).
+
+- [ ] **Step 1: Add card named-format examples + `CardPageFormats` doc.** Find the end of the
+  `GraphPageFormats` doc block (added in Task 11):
+
+```
+        #     [[[[year]]]]
+        #         label   = datetime_custom_graph_dayonly
+```
+Replace with:
+```
+        #     [[[[year]]]]
+        #         label   = datetime_custom_graph_dayonly
+
+        # Card (strftime) named formats — used by [[[CardPageFormats]]] below.
+        # NOTE: these are Python strftime strings (%H, %d, …), NOT moment tokens.
+        # datetime_custom_card_daytime = %H:%M
+        # datetime_custom_card_full    = %a %d.%m.%Y %H:%M
+
+        # Per-page CARD date formats (value-card min/max times on a page)
+        # ---------------------------------------------------------------------
+        # Set the min/max-time format for EVERY card on a page. Values are
+        # datetime_custom_card_* (strftime) names from above. Cards are
+        # page-level only (no per-card override).
+        #
+        # Page scopes: current, yesterday, week, month, month-archive, year,
+        # year-archive (telemetry uses 'current'). The two *-archive scopes
+        # inherit from month / year when omitted. With no CardPageFormats block,
+        # cards use the default datetime_today / datetime / datetime_archive.
+        #
+        # [[[CardPageFormats]]]
+        #     month = datetime_custom_card_full
+        #     year  = datetime_custom_card_full
+```
+
+- [ ] **Step 2: Verify**
+
+```bash
+grep -n "CardPageFormats\|datetime_custom_card_" skins/neowx-material/skin.conf
+python -c "import configobj; configobj.ConfigObj('skins/neowx-material/skin.conf', file_error=True); print('skin.conf parses OK')" 2>/dev/null || echo "(configobj not installed — skip)"
+```
+Expected: the card doc block + `CardPageFormats` example present.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add skins/neowx-material/skin.conf
+git commit -m "Document CardPageFormats and datetime_custom_card_* formats in skin.conf"
+```
+End the body with the `Co-Authored-By` trailer.
+
+## Task 15: Integrated verification (Phase 4 cards, manual render)
+
+Requires a live WeeWX install.
+
+- [ ] **Step 1: No-op.** With no `CardPageFormats`, regenerate; confirm every page's card min/max
+  times match today's output (current/yesterday/telemetry → `%H:%M`; week/month → `%a %d %H:%M`;
+  year → `%d.%m. %H:%M`).
+- [ ] **Step 2: Per-page card format.** Add `datetime_custom_card_full = %a %d.%m.%Y %H:%M` and
+  `[[[CardPageFormats]]][[[[month]]]] = datetime_custom_card_full`. Regenerate; confirm card times on
+  `month.html` render as e.g. `Mon 03.02.2025 14:30`, and other pages' cards are unchanged.
+- [ ] **Step 3: Archive inheritance.** Confirm `month-YYYY-MM.html` cards inherit the `month` card
+  format; then add `[[[[month-archive]]]] = <other card format>` and confirm the archive page switches
+  while `month.html` keeps the base.
+- [ ] **Step 4: Dialect guard.** Temporarily set a card scope to a `datetime_custom_graph_*` (moment)
+  name; confirm the card renders the moment tokens **literally** (documents why the two prefixes
+  exist), then revert.
+
+---
+
+## Self-Review (Phase 4)
+
+**Spec coverage:**
+- `[[[CardPageFormats]]]`, 7 scopes + telemetry, named `datetime_custom_card_*` strftime → Tasks 13 + 14. ✓
+- Per-page resolution with archive→base inheritance and per-page built-in defaults → Task 13 Edit 1 table. ✓
+- All 4 (telemetry 2) card call sites swapped to `$card_datetime` → Task 13 Edit 2 + Step 9 grep. ✓
+- `#set global` so card `#def` renderers see the value → Task 13 Edit 1. ✓
+- Distinct `datetime_custom_graph_*` / `datetime_custom_card_*` prefixes → Task 11 (rename) + Task 14 (card names). ✓
+- Backward compatible (no `CardPageFormats` → page defaults) → Task 13 resolution default; Task 15 Step 1. ✓
+- Out of scope (per-card overrides, non-card strftime) → untouched. ✓
+
+**Placeholder scan:** No TBD/TODO; every step has full content/commands. ✓
+
+**Type/name consistency:** `$card_datetime` set (Task 13 Edit 1) and consumed (Task 13 Edit 2)
+consistently. Scope strings match the spec and the Phase 3 `$neowx_page_scope` set. Card default
+formats (`datetime_today`/`datetime`/`datetime_archive`) match the current per-page usage surveyed in
+the spec. `datetime_custom_card_*` names consistent between Task 14 examples and the spec. ✓
