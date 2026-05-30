@@ -18,8 +18,11 @@ format per page.
 
 Let a custom chart declare a named date format — defined in `[[Formatting]]` with the
 `datetime_custom_` convention prefix — and override the chart's x-axis labels and/or tooltip date,
-at chart level and at the per-page override level (`[[[[week]]]]`, `[[[[month]]]]`, `[[[[year]]]]`,
-`[[[[current]]]]`, `[[[[yesterday]]]]`).
+at chart level and at the per-page override level (`[[[[current]]]]`, `[[[[yesterday]]]]`,
+`[[[[week]]]]`, `[[[[month]]]]`, `[[[[month-archive]]]]`, `[[[[year]]]]`, `[[[[year-archive]]]]`).
+The two per-period archive pages additionally support a **whole-block** per-page override
+(`column` / `values` / per-field maps / date formats) via the `*-archive` subsections, which inherit
+from their base `month` / `year` subsection.
 
 Out of scope for this spec (see Future work): per-page "all charts" overrides, per-chart overrides
 for built-in charts, and value-card / Python-strftime date formatting.
@@ -54,22 +57,48 @@ and inside a per-page override subsection.
 
 #### Supported per-page override subsections
 
-These are the only five override scopes recognized today. Each template hardcodes its own key via
-`cc.get('<key>', {})`; any other subsection name is ignored as an override.
+Seven override scopes are recognized. The to-date templates each read one subsection; the two
+**archive** templates read their archive subsection **merged over** the matching to-date subsection
+(see "Archive inheritance" below). Any other subsection name is ignored as an override.
 
-| Subsection           | Page(s)                                   | Template(s)                              |
-|----------------------|-------------------------------------------|------------------------------------------|
-| `[[[[current]]]]`    | Current / "today"                         | `index.html.tmpl`                        |
-| `[[[[yesterday]]]]`  | Yesterday                                 | `yesterday.html.tmpl`                    |
-| `[[[[week]]]]`       | Week                                      | `week.html.tmpl`                         |
-| `[[[[month]]]]`      | Month — to-date **and** archive month     | `month.html.tmpl`, `month-%Y-%m.html.tmpl` |
-| `[[[[year]]]]`       | Year — to-date **and** archive year       | `year.html.tmpl`, `year-%Y.html.tmpl`    |
+| Subsection             | Page                        | Template(s)                | Resolves from                                  |
+|------------------------|-----------------------------|----------------------------|------------------------------------------------|
+| `[[[[current]]]]`      | Current / "today"           | `index.html.tmpl`          | `current`                                      |
+| `[[[[yesterday]]]]`    | Yesterday                   | `yesterday.html.tmpl`      | `yesterday`                                    |
+| `[[[[week]]]]`         | Week                        | `week.html.tmpl`           | `week`                                         |
+| `[[[[month]]]]`        | Month to-date               | `month.html.tmpl`          | `month`                                        |
+| `[[[[month-archive]]]]`| Per-period archive month    | `month-%Y-%m.html.tmpl`    | `month` overlaid by `month-archive`            |
+| `[[[[year]]]]`         | Year to-date                | `year.html.tmpl`           | `year`                                         |
+| `[[[[year-archive]]]]` | Per-period archive year     | `year-%Y.html.tmpl`        | `year` overlaid by `year-archive`              |
 
-`month` and `year` each drive two templates (rolling to-date + per-period archive). A single
-`[[[[month]]]]` / `[[[[year]]]]` subsection applies to both; there is no way at this level to format
-the archive page differently from the to-date page. (Archive pages do default to a different base
-label format — `datetime_graph_archive` vs `datetime_graph_label` — but an override key applies to
-both.) See Future work for the planned `archive-month` / `archive-year` split.
+##### Archive inheritance
+
+`[[[[month-archive]]]]` and `[[[[year-archive]]]]` let the per-period archive pages
+(`month-%Y-%m.html.tmpl`, `year-%Y.html.tmpl`) carry a **different configuration** from the rolling
+to-date pages — and this applies to the **whole per-page block**, not just date formats: `column`,
+`values`, per-field column maps, and the `datetime_*_format` keys.
+
+The archive subsection **inherits** from its base subsection: the archive template's effective
+per-page config is `[[[[month]]]]` (or `[[[[year]]]]`) **overlaid by** `[[[[month-archive]]]]` (or
+`[[[[year-archive]]]]`). Any key absent from the archive subsection falls through to the base
+subsection, then to the chart top-level, then to the default. Consequently:
+
+- A config with **no** archive subsection behaves exactly as before — archive pages use the `month` /
+  `year` subsection. (Backward compatible.)
+- You only specify in the archive subsection what should **differ** on the archive page.
+
+```ini
+[[[customChartOutTemp]]]
+    charttype = area
+    values    = outTemp, dewpoint
+    column    = avg
+    [[[[month]]]]
+        outTemp = min, max
+        datetime_label_format = datetime_custom_dayonly
+    [[[[month-archive]]]]
+        # inherits values/outTemp=min,max from [[[[month]]]]; overrides only the label format
+        datetime_label_format = datetime_custom_monthonly
+```
 
 ```ini
 [[[customChartOutTemp]]]
@@ -88,13 +117,18 @@ both.) See Future work for the planned `archive-month` / `archive-year` split.
 
 Evaluated independently for label and tooltip, per page render:
 
-1. Per-page override subsection key (e.g. `[[[[week]]]] datetime_label_format`)
+1. Per-page override subsection key. On the two **archive** pages this is the merged subsection, so
+   the order within this tier is: `[[[[month-archive]]]]`/`[[[[year-archive]]]]` key →
+   `[[[[month]]]]`/`[[[[year]]]]` key. On all other pages it is simply that page's subsection key.
 2. Chart top-level key
 3. **Unset → inherit the page's existing default** (`datetime_graph_label` / `datetime_graph_tooltip`,
    or `datetime_graph_archive` on archive pages) — i.e. no override is emitted.
 
 A blank value, or a name not found in `[[Formatting]]`, falls back to tier 3 silently (no crash,
 no JS error).
+
+The same merge governs the non-date keys (`column`, `values`, per-field maps) on archive pages, since
+they all read from the same resolved per-page config.
 
 ## Renderer design
 
@@ -120,17 +154,33 @@ current feature uses it only for per-chart overrides.
 
 ### Custom-chart loop changes (7 templates)
 
-Templates with a `customChart*` render loop, with their per-page override key:
+Templates with a `customChart*` render loop, with how each builds its `cc_page` (the resolved
+per-page config the rest of the loop reads):
 
-| Template               | page key    |
-|------------------------|-------------|
-| `index.html.tmpl`      | `current`   |
-| `yesterday.html.tmpl`  | `yesterday` |
-| `week.html.tmpl`       | `week`      |
-| `month.html.tmpl`      | `month`     |
-| `month-%Y-%m.html.tmpl`| `month`     |
-| `year.html.tmpl`       | `year`      |
-| `year-%Y.html.tmpl`    | `year`      |
+| Template               | `cc_page` source                                              |
+|------------------------|---------------------------------------------------------------|
+| `index.html.tmpl`      | `cc.get('current', {})`                                       |
+| `yesterday.html.tmpl`  | `cc.get('yesterday', {})`                                     |
+| `week.html.tmpl`       | `cc.get('week', {})`                                          |
+| `month.html.tmpl`      | `cc.get('month', {})`                                         |
+| `month-%Y-%m.html.tmpl`| `cc.get('month', {})` overlaid by `cc.get('month-archive', {})` |
+| `year.html.tmpl`       | `cc.get('year', {})`                                          |
+| `year-%Y.html.tmpl`    | `cc.get('year', {})` overlaid by `cc.get('year-archive', {})`   |
+
+The five to-date templates are unchanged from the original feature. The two **archive** templates
+build `cc_page` as a shallow merge so the archive subsection inherits from the base subsection:
+
+```cheetah
+## month-%Y-%m.html.tmpl (year-%Y.html.tmpl uses 'year' / 'year-archive')
+#set $cc_page = dict($cc.get('month', {}))
+#silent $cc_page.update($cc.get('month-archive', {}))
+```
+
+`dict(...)` + `.update(...)` overlays the archive subsection's keys (scalars, lists, and per-field
+column keys) onto the base subsection's, so archive-only keys win and unset keys are inherited. The
+page subsections contain only scalar/list values (no deeper nesting), so a shallow merge is correct.
+Because every downstream read goes through `cc_page.get(...)`, this single change gives the archive
+pages independent `column` / `values` / per-field maps / `datetime_*_format` with no other edits.
 
 In each loop:
 
@@ -139,7 +189,8 @@ In each loop:
    mistaken for per-field column assignments.
 
 2. **Resolve formats.** For label and tooltip independently:
-   - read the key from `cc_page` (page override), else from `cc` (chart top level);
+   - read the key from `cc_page` (the resolved per-page config — already archive-merged where
+     applicable), else from `cc` (chart top level);
    - if non-empty, look it up in `$Extras.Formatting` to get the moment string;
    - empty / missing → leave unset (no override emitted).
 
@@ -191,6 +242,12 @@ No automated test harness exists in this skin; verification is manual.
 4. Open the pages in a browser; confirm x-axis labels and tooltip render with the chosen format, and
    that charts without the keys are unchanged.
 5. Negative case: reference an undefined key → chart falls back to the default format, no console error.
+6. Archive merge: add a `[[[[month-archive]]]]` (and `[[[[year-archive]]]]`) subsection that sets a
+   *different* `datetime_label_format` and one differing non-date key (e.g. a per-field `outTemp =
+   avg`). Regenerate and confirm: (a) the archive page (`month-YYYY-MM.html`, `year-YYYY.html`) uses
+   the archive values; (b) the to-date page (`month.html`, `year.html`) still uses the base
+   `[[[[month]]]]` / `[[[[year]]]]` values; (c) a chart with `[[[[month]]]]` but **no**
+   `[[[[month-archive]]]]` renders identically on both, proving inheritance/backward-compat.
 
 ## Future work (informs, not built here)
 
@@ -206,12 +263,10 @@ independently for label and tooltip.
 - **Per-chart override for built-in charts.** Built-in charts have no config block, so this needs a
   name→format map (e.g. `[[Charts]] [[[DateFormats]]] outTemp = datetime_custom_full`) consulted in
   `getChartJsCode`. Heaviest piece; only if per-chart granularity on built-ins is wanted.
-- **Separate archive scopes (`archive-month`, `archive-year`).** Today `[[[[month]]]]` /
-  `[[[[year]]]]` drive both the to-date page and the per-period archive page. Add
-  `[[[[archive-month]]]]` and `[[[[archive-year]]]]` subsections so the archive templates
-  (`month-%Y-%m.html.tmpl`, `year-%Y.html.tmpl`) can resolve a distinct format, falling back to the
-  `month` / `year` subsection when the archive-specific one is absent. When implementing the current
-  spec, keep the per-page key configurable per template (rather than assuming a single key per
-  period) so adding these scopes is a localized change to the two archive templates.
+
+> The previously-listed "separate archive scopes" item is now **in scope** — see
+> [Supported per-page override subsections](#supported-per-page-override-subsections). It is
+> implemented as `[[[[month-archive]]]]` / `[[[[year-archive]]]]` with inheritance from the base
+> subsection.
 
 Both reuse the same `neowxDateFormatter` helper, so no rework of this spec's output is required.
