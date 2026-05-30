@@ -45,7 +45,9 @@ literal gibberish on the page.
 | `MMM` / `MMMM` | month name short / long | `Mar` / `March` |
 | `YY` / `YYYY` | year 2- / 4-digit | `26` / `2026` |
 | `HH` | hour, 24h | `14` |
+| `hh` | hour, 12h | `02` |
 | `mm` | **minutes** (lowercase!) | `05` |
+| `A` / `a` | AM/PM / am-pm marker | `PM` / `pm` |
 
 > ⚠️ In moment, **`MM` is the month** and **`mm` is minutes**. Writing `HH:MM` by mistake is so
 > common that the skin auto-corrects `:MM` → `:mm` for you - but get it right anyway.
@@ -60,7 +62,15 @@ literal gibberish on the page.
 | `%b` / `%B` | month name short / long | `Mar` / `March` |
 | `%y` / `%Y` | year 2- / 4-digit | `26` / `2026` |
 | `%H` | hour, 24h | `14` |
+| `%I` | hour, 12h | `02` |
 | `%M` | **minutes** | `05` |
+| `%p` | AM/PM marker | `PM` |
+
+> **A note on regional ordering.** The examples in this guide use the European convention - day-first
+> and a 24-hour clock (`DD.MM.YYYY HH:mm` for charts, `%d.%m.%Y %H:%M` for cards). US-style is equally
+> supported - just swap the tokens to month-first with a 12-hour clock and an AM/PM marker, e.g.
+> `ddd MM/DD/YYYY hh:mm A` (chart) or `%a %m/%d/%Y %I:%M %p` (card). Pick whichever you prefer; the
+> skin doesn't care which ordering you use.
 
 ---
 
