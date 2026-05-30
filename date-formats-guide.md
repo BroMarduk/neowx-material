@@ -71,7 +71,10 @@ literal gibberish on the page.
 
 > **Drop a leading zero** on Linux/glibc (the usual WeeWX host) by prefixing the token with `-`:
 > `%-d` `%-m` `%-H` `%-I` (instead of `%d` `%m` `%H` `%I`). Example: `%-d.%-m.%Y %-H:%M` → `7.3.2026 9:05`.
-> This is a GNU `strftime` extension and may not work on non-Linux hosts.
+> This is a GNU `strftime` extension and may not work on non-Linux hosts. It also does **not** apply to
+> the live-updated header fields (`date` / `time` / `datetime` / `datetime_updated`) when MQTT is
+> enabled - the live formatter doesn't understand `%-`, so use the padded tokens there. Cards and all
+> static (non-live) renders are fine.
 
 > **A note on regional ordering.** The examples in this guide use the European convention - day-first
 > and a 24-hour clock (`DD.MM.YYYY HH:mm` for charts, `%d.%m.%Y %H:%M` for cards). US-style is equally
@@ -149,7 +152,7 @@ Page sub-sections: `[[[[current]]]]`, `[[[[yesterday]]]]`, `[[[[week]]]]`, `[[[[
 
 ## Example 2 - Change **Every** Chart on a Page
 
-This is the one most people actually want: "make the whole Month page use a shorter date." Use
+One thing you might want to do: "make the whole Month page use a shorter date." Use
 `[[[GraphPageFormats]]]` under `[[Formatting]]`. It hits **all** charts on the page - the built-in
 ones (outTemp, rain, wind…) *and* your custom charts:
 
@@ -164,7 +167,9 @@ ones (outTemp, rain, wind…) *and* your custom charts:
                 label   = datetime_custom_graph_month       # just "Mar", "Apr", … on the Year page
 ```
 
-- Scopes: the same seven page names as above.
+- Scopes: `current`, `yesterday`, `week`, `month`, `month-archive`, `year`, `year-archive`, and
+  `telemetry` (the per-chart sub-sections in Example 1 cover all of these except `telemetry`, which
+  has no custom charts - but `GraphPageFormats` still formats its built-in battery charts).
 - Set `label`, `tooltip`, or both. Omit one and that slot keeps the page's normal format.
 - A per-chart format (Example 1) still wins over this for that one chart.
 
@@ -207,9 +212,9 @@ The small "high 24.3° at **14:32**" times under each value card are controlled 
             year  = datetime_custom_card_full
 ```
 
-- Same seven scopes; archive scopes inherit from `month` / `year`.
+- Same scopes as `GraphPageFormats` (including `telemetry`); the `*-archive` scopes inherit from
+  `month` / `year`.
 - Cards are page-level only - there's no per-individual-card override.
-- The Telemetry page's cards follow the `current` scope.
 
 ---
 
@@ -239,7 +244,7 @@ per-chart keys, every chart and card renders exactly as it does today.
 
 ## Customizing the Built-in Defaults
 
-The "defaults" above aren't magic - they're ordinary keys that already live in your `skin.conf` under
+The "defaults" above are the built-in keys that already live in the `skin.conf` under
 `[Extras] → [[Formatting]]`. The `GraphPageFormats` / `CardPageFormats` / per-chart layers sit *on top*
 of them; if you'd rather change the **baseline for the whole site** (one house style, no per-page
 fiddling), just edit these keys directly.

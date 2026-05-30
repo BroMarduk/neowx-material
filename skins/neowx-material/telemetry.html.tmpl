@@ -295,9 +295,9 @@
         #attr $active_nav = ''
         #include "header.inc"
 
-        ## Per-page card date format: CardPageFormats[current] (a datetime_custom_card_* name) -> page default.
+        ## Per-page card date format: CardPageFormats[telemetry] (a datetime_custom_card_* name) -> page default.
         #set $cpf = $Extras.Formatting.get('CardPageFormats', {})
-        #set $card_key = $cpf.get('current', '')
+        #set $card_key = $cpf.get('telemetry', '')
         #set global $card_datetime = $Extras.Formatting.get($card_key, $Extras.Formatting.datetime_today) if $card_key else $Extras.Formatting.datetime_today
         #if isinstance($card_datetime, list)
             #set global $card_datetime = ', '.join($card_datetime)
@@ -331,6 +331,7 @@
         </main>
 
         #include "footer.inc"
+        #set global $neowx_page_scope = 'telemetry'
         #include "js.inc"
 
         ## +-------------------------------------------------------------------------+
