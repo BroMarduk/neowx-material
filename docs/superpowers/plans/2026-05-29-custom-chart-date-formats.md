@@ -534,7 +534,7 @@ End the body with a blank line then:
 chart (built-in + custom) on a page, for all 7 page scopes, with archive→base inheritance; per-chart
 overrides still win.
 
-**Architecture:** Each chart template declares `#set $neowx_page_scope = '<scope>'` before
+**Architecture:** Each chart template declares `#set global $neowx_page_scope = '<scope>'` before
 `#include "js.inc"`. `js.inc` resolves the page's effective label/tooltip once and emits
 `window.NEOWX_CHART_FORMAT = { label, tooltip }`. The base `graph_*_config.inc` formatters change from
 the baked `$Extras.Formatting.datetime_graph_*` literal to `neowxDateFormatter(NEOWX_CHART_FORMAT.X)`.
@@ -746,7 +746,7 @@ Find:
 ```
 Replace with:
 ```
-        #set $neowx_page_scope = 'current'
+        #set global $neowx_page_scope = 'current'
         #include "js.inc"
 ```
 
@@ -766,7 +766,7 @@ archive, history) — they intentionally fall back to the global defaults.
 ```bash
 grep -rn "neowx_page_scope" skins/neowx-material/index.html.tmpl skins/neowx-material/yesterday.html.tmpl skins/neowx-material/week.html.tmpl skins/neowx-material/month.html.tmpl "skins/neowx-material/month-%Y-%m.html.tmpl" skins/neowx-material/year.html.tmpl "skins/neowx-material/year-%Y.html.tmpl"
 ```
-Expected: exactly one `#set $neowx_page_scope = '<scope>'` per file with the scope from the table.
+Expected: exactly one `#set global $neowx_page_scope = '<scope>'` per file with the scope from the table.
 
 - [ ] **Step 9: Commit**
 
